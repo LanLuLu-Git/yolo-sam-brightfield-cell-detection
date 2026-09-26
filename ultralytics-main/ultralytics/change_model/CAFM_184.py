@@ -101,4 +101,4 @@ if __name__ == '__main__':
     print(f"Input tensor shape: {input.shape}")
     print(f"Output tensor shape: {output.shape}")
     print("Same WeChat official account, Bilibili, and CSDN account")
-    print("布尔大学士 reminds you: the code is error-free~~~~")
+    print("The code is error-free~~~~")

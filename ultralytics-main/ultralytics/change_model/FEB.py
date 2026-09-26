@@ -5,7 +5,6 @@ import torch.nn as nn
 # Paper title: Spatial-Frequency Enhanced Mamba for Multi-Modal Image Fusion
 # Paper link: https://arxiv.org/pdf/2511.06593
 # Official GitHub: https://github.com/SunHui1216/SFMFusion/blob/main/models/model.py
-# Code improver: 一勺汤
 
 
 class FB(nn.Module):

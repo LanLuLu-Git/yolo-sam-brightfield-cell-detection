@@ -22,8 +22,6 @@ Detection and segmentation of cells in brightfield microscopy images, combining 
 ```
 ├── XTCpredictV21.py          # main batch prediction script (YOLO + SAM)
 ├── jpkautorun.py             # single-image auto-run loop (watches one input path)
-├── XTCmoutiyobject.py        # SAM-only multi-object segmentation example
-├── export_onnx.py            # export a YOLO checkpoint to ONNX
 ├── version_info.py           # print Python / library version info
 ├── ultralytics-main/         # modified ultralytics source (change_model/ improvements)
 ├── segment-anything-main/    # only the SAM checkpoint lives here (source comes from pip)
@@ -81,10 +79,6 @@ All paths and parameters are centralized in the `XTCPredictConfig` class at the 
 3. Auto-run mode (watch a single image path in a loop, converting tif→jpg and processing on arrival):
    ```bash
    python jpkautorun.py
-   ```
-4. Export a trained checkpoint to ONNX:
-   ```bash
-   python export_onnx.py
    ```
 
 ## Notes

@@ -18,10 +18,6 @@ tqdm==4.67.1
 ultralytics==8.3.252
 segment-anything==1.0
 
-# ONNX export (used by export_onnx.py)
-onnx==1.17.0
-onnxruntime==1.19.2
-
 # Direct / transitive dependencies used by the scripts and ultralytics
 pandas==2.0.3
 PyYAML==6.0.2

@@ -121,4 +121,4 @@ if __name__ == "__main__":
     print(f"High-frequency output tensor shape: {out_H2.shape}")
 
     print("\nSame WeChat official account, Bilibili, and CSDN account")
-    print("布尔大学士 reminds you: the code is error-free~~~~")
+    print("The code is error-free~~~~")
