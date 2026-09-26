@@ -1,16 +1,16 @@
 from ultralytics import YOLO
 
 if __name__ == '__main__':
-    # 加载模型
+    # Load the model
     #model = YOLO("ultralytics-main/ultralytics/cfg/models/v8/yolov8.yaml")
     model = YOLO("ultralytics-main/ultralytics/cfg/models/v8/yolov8FEB.yaml")
 
-    # 开始训练n
+    # Start training
     results = model.train(
-        data="ultralytics-main/260414-mcf7-mcf10a.yaml",  # 你的数据集配置
-        epochs=200,              # 训练轮数
-        imgsz=640,              # 图像大小
-        batch=4,               # 批次大小
-        device=0,              # GPU设备
-        workers=4                # 数据加载线程数（Windows上建议使用较小的值）
+        data="ultralytics-main/260414-mcf7-mcf10a.yaml",  # your dataset config
+        epochs=200,              # number of training epochs
+        imgsz=640,              # image size
+        batch=4,               # batch size
+        device=0,              # GPU device
+        workers=4                # data loading worker count (a smaller value is recommended on Windows)
     )

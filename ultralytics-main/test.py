@@ -1,14 +1,14 @@
 """
-YOLO模型测试脚本 - 验证模型泛化能力
+YOLO model test script - verify model generalization ability
 
-使用说明:
+Usage:
 python ultralytics-main/test.py --conf 0.76 --weights runs/detect/train5/weights/best.pt --data ultralytics-main/hgc27-mgc803.yaml --img 640
 
-参数说明:
---weights: 训练好的模型权重路径
---conf: 置信度阈值
---data: 数据集配置文件路径
---img: 输入图像尺寸
+Parameter descriptions:
+--weights: trained model weights path
+--conf: confidence threshold
+--data: dataset config file path
+--img: input image size
 """
 
 import argparse
@@ -16,29 +16,29 @@ from ultralytics import YOLO
 import os
 
 def main():
-    # 参数配置
+    # Argument config
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, required=True, help='模型权重路径(必须提供)')
-    parser.add_argument('--conf', type=float, default=0.76, help='置信度阈值')
-    parser.add_argument('--data', type=str, default='ultralytics-main/hgc27-mgc803.yaml', help='数据集配置文件路径')
-    parser.add_argument('--img', type=int, default=640, help='输入图像尺寸')
-    
+    parser.add_argument('--weights', type=str, required=True, help='model weights path (required)')
+    parser.add_argument('--conf', type=float, default=0.76, help='confidence threshold')
+    parser.add_argument('--data', type=str, default='ultralytics-main/hgc27-mgc803.yaml', help='dataset config file path')
+    parser.add_argument('--img', type=int, default=640, help='input image size')
+
     args = parser.parse_args()
-    
-    # 加载模型
+
+    # Load the model
     model = YOLO(args.weights)
-    
-    # 测试模型
+
+    # Test the model
     results = model.val(
         data=args.data,
         conf=args.conf,
         imgsz=args.img,
-        split='test',  # 使用测试集验证泛化能力
-        verbose=True   # 输出详细评估指标
+        split='test',  # use the test set to verify generalization
+        verbose=True   # output detailed evaluation metrics
     )
-    
-    # 打印关键评估指标
-    print(f"\n模型泛化能力评估结果:")
+
+    # Print key evaluation metrics
+    print(f"\nModel generalization evaluation results:")
     print(f"mAP@0.5: {float(results.box.map):.4f}")
     print(f"mAP@0.5:0.95: {float(results.box.map):.4f}")
     #print(f"Precision: {float(results.box.p):.4f}")

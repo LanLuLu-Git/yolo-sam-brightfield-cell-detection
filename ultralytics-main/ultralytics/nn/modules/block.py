@@ -1161,43 +1161,43 @@ class C3k(C3):
 
 def custom_complex_normalization(input_tensor, dim=-1):
     """
-    自定义复数归一化函数
+    Custom complex normalization function.
     
-    对复数张量的实部和虚部分别进行softmax归一化处理。
-    这是频率域注意力机制中的关键步骤，用于确保注意力权重的数值稳定性。
+    Applies softmax normalization to the real and imaginary parts of a complex tensor separately.
+    This is a key step in the frequency-domain attention mechanism, used to ensure the numerical stability of the attention weights.
     
-    参数:
-        input_tensor: 复数张量，包含实部和虚部
-        dim: 归一化操作的维度，默认为-1（最后一个维度）
+    Args:
+        input_tensor: complex tensor, containing real and imaginary parts
+        dim: dimension to normalize over, defaults to -1 (last dimension)
     
-    返回:
-        归一化后的复数张量
+    Returns:
+        normalized complex tensor
     """
-    real_part = input_tensor.real  # 提取实部
-    imag_part = input_tensor.imag  # 提取虚部
-    norm_real = F.softmax(real_part, dim=dim)  # 实部softmax归一化
-    norm_imag = F.softmax(imag_part, dim=dim)  # 虚部softmax归一化
-    return torch.complex(norm_real, norm_imag)  # 重新组合成复数张量
+    real_part = input_tensor.real  # extract the real part
+    imag_part = input_tensor.imag  # extract the imaginary part
+    norm_real = F.softmax(real_part, dim=dim)  # softmax normalization of the real part
+    norm_imag = F.softmax(imag_part, dim=dim)  # softmax normalization of the imaginary part
+    return torch.complex(norm_real, norm_imag)  # recombine into a complex tensor
 
 
 class PFAE(nn.Module):
     """
-    PFAE (Parallel Frequency Attention Enhancement) 模块
+    PFAE (Parallel Frequency Attention Enhancement) module.
     
-    这是一个专门用于伪装目标检测的频率增强注意力网络模块。
-    它通过并行处理和多尺度特征提取，结合频率域注意力机制来增强特征表示能力。
+    A frequency-enhanced attention network module designed specifically for camouflaged object detection.
+    It enhances the feature representation capability through parallel processing, multi-scale feature extraction, and a frequency-domain attention mechanism.
     """
 
     def __init__(self, dim):
         """
-        初始化PFAE模块
+        Initialize the PFAE module.
         
-        参数:
-            dim: 输入特征图的通道数
+        Args:
+            dim: number of channels of the input feature map
         """
         super().__init__()
         
-        # 第一部分：下采样层
+        # Part 1: downsampling layer
         in_dim = dim // 2
         self.down_conv = nn.Sequential(
             nn.Conv2d(dim, in_dim, 3, padding=1),
@@ -1206,7 +1206,7 @@ class PFAE(nn.Module):
         )
         down_dim = in_dim // 2
 
-        # 第二部分：六个并行卷积分支
+        # Part 2: six parallel convolution branches
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_dim, down_dim, kernel_size=1),
             nn.BatchNorm2d(down_dim),
@@ -1240,14 +1240,14 @@ class PFAE(nn.Module):
         self.conv6_no_bn = nn.Conv2d(in_dim, down_dim, kernel_size=1)
         self.conv6_act = nn.ReLU(True)
 
-        # 第三部分：特征融合层
+        # Part 3: feature fusion layer
         self.fuse = nn.Sequential(
             nn.Conv2d(6 * down_dim, down_dim, kernel_size=1),
             nn.BatchNorm2d(down_dim),
             nn.ReLU(True)
         )
 
-        # 第四部分：输出层
+        # Part 4: output layer
         self.out = nn.Sequential(
             nn.Conv2d(down_dim, down_dim // 2, kernel_size=3, padding=1),
             nn.BatchNorm2d(down_dim // 2),
@@ -1255,7 +1255,7 @@ class PFAE(nn.Module):
             nn.Conv2d(down_dim // 2, dim, kernel_size=1)
         )
 
-        # 第五部分：频率域注意力相关参数
+        # Part 5: frequency-domain attention parameters
         self.temperature = nn.Parameter(torch.ones(8, 1, 1))
         self.project_out = nn.Conv2d(down_dim * 2, down_dim, kernel_size=1, bias=False)
         self.weight = nn.Sequential(
@@ -1269,66 +1269,66 @@ class PFAE(nn.Module):
 
     def frequency_attention(self, x):
         """
-        频率域注意力计算函数
+        Frequency-domain attention computation function.
         """
         b, c, h, w = x.shape
         
-        # 空间域到频域的变换
+        # spatial-domain to frequency-domain transform
         q_f = torch.fft.fft2(x.float())
         k_f = torch.fft.fft2(x.float())
         v_f = torch.fft.fft2(x.float())
         tepqkv = torch.fft.fft2(x.float())
 
-        # 多头处理
+        # multi-head processing
         q_f = rearrange(q_f, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
         k_f = rearrange(k_f, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
         v_f = rearrange(v_f, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
 
-        # 特征归一化
+        # feature normalization
         q_f = F.normalize(q_f, dim=-1)
         k_f = F.normalize(k_f, dim=-1)
 
-        # 注意力权重计算
+        # attention weight computation
         attn_f = (q_f @ k_f.transpose(-2, -1)) * self.temperature
         attn_f = custom_complex_normalization(attn_f, dim=-1)
 
-        # 频域到空间域的反变换
+        # frequency-to-spatial inverse transform
         out_f = torch.abs(torch.fft.ifft2(attn_f @ v_f))
         out_f = rearrange(out_f, 'b head c (h w) -> b (head c) h w', 
                          head=self.num_heads, h=h, w=w)
 
-        # 局部注意力增强
+        # local attention enhancement
         out_f_l = torch.abs(torch.fft.ifft2(self.weight(tepqkv.real) * tepqkv))
 
-        # 特征融合和残差连接
+        # feature fusion and residual connection
         out = self.project_out(torch.cat((out_f, out_f_l), 1))
         return out + x
 
     def forward(self, x):
         """
-        PFAE模块的前向传播函数
+        Forward propagation function of the PFAE module.
         """
         training_backup = self.training
         if x.size(0) == 1:
             self.eval()
         
         try:
-            # 下采样
+            # downsampling
             x = self.down_conv(x)
             
-            # 分支处理
+            # branch processing
             conv1 = self.conv1(x)
             F_2 = self.frequency_attention(self.conv2(x))
             F_3 = self.frequency_attention(self.conv3(F_2))
             F_4 = self.frequency_attention(self.conv4(F_3))
             F_5 = self.frequency_attention(self.conv5(F_4))
             
-            # 全局分支处理
+            # global branch processing
             global_feat = F.adaptive_avg_pool2d(x, 1)
             conv5 = self.conv6_act(self.conv6_no_bn(global_feat))
             conv5 = F.interpolate(conv5, size=x.size()[2:], mode='bilinear', align_corners=False)
             
-            # 特征融合
+            # feature fusion
             F_out = self.out(self.fuse(torch.cat((conv1, F_2, F_3, F_4, F_5, conv5), 1)))
         finally:
             self.training = training_backup
@@ -1346,7 +1346,7 @@ class Bottleneck_PFAE(nn.Module):
         super().__init__()
         c_ = int(c2 * e)  # hidden channels
         self.cv1 = Conv(c1, c_, k[0], 1)
-        self.cv2 = PFAE(c_)  # 在瓶颈模块中嵌入PFAE模块
+        self.cv2 = PFAE(c_)  # embed the PFAE module in the bottleneck
         self.add = shortcut and c1 == c2
 
     def forward(self, x):
@@ -1363,7 +1363,7 @@ class C3k_PFAE(C3):
         """
         super().__init__(c1, c2, n, shortcut, g, e)
         c_ = int(c2 * e)  # hidden channels
-        # 使用Bottleneck_PFAE替代普通的Bottleneck，在特征提取中集成PFAE注意力机制
+        # Use Bottleneck_PFAE instead of the regular Bottleneck, integrating the PFAE attention mechanism into feature extraction
         self.m = nn.Sequential(*(Bottleneck_PFAE(c_, c_, shortcut, g, k=(k, k), e=1.0) for _ in range(n)))
 
 

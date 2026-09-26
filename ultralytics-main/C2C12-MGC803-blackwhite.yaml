@@ -2,6 +2,6 @@ train: D:/Data/徐庭臣训练数据集/C2C12-MGC803-blackwhite/train
 val: D:/Data/徐庭臣训练数据集/C2C12-MGC803-blackwhite/val
 test: D:/Data/徐庭臣训练数据集/C2C12-MGC803-blackwhite/test
 nc: 2
-channels: 1  # 单通道黑白图像
+channels: 1  # single-channel grayscale image
 
 names: ['C2C12', 'MGC803']

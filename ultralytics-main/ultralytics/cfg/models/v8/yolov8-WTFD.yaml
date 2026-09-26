@@ -39,12 +39,12 @@ head:
   - [-1, 3, C2f, [256]] # 15 (P3/8-small)
 
   - [-1, 1, Conv, [256, 3, 2]]
-  - [-1, 1, WTFD, [256]] # 17 - 在下采样后添加WTFD模块
+  - [-1, 1, WTFD, [256]] # 17 - add WTFD module after downsampling
   - [[-1, 12], 1, Concat, [1]] # cat head P4
   - [-1, 3, C2f, [512]] # 19 (P4/16-medium)
 
   - [-1, 1, Conv, [512, 3, 2]]
-  - [-1, 1, WTFD, [512]] # 21 - 在下采样后添加WTFD模块
+  - [-1, 1, WTFD, [512]] # 21 - add WTFD module after downsampling
   - [[-1, 9], 1, Concat, [1]] # cat head P5
   - [-1, 3, C2f, [1024]] # 23 (P5/32-large)
 

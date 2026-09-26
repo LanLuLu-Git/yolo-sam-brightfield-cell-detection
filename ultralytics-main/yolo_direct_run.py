@@ -4,26 +4,26 @@ from ultralytics import YOLO
 import time
 from tqdm import tqdm
 
-# -----------------------------# 可修改参数集中区域# -----------------------------# 默认配置参数# 在这里直接修改参数即可运行，无需命令行输入
+# -----------------------------# Centralized area of editable parameters# -----------------------------# Default config parameters# Modify parameters directly here to run, no command-line input needed
 DEFAULT_CONFIG = {
-    'weights': 'runs/260721前/260107-C2C12-293-YOLOv8n/weights/best.pt',  # 模型权重文件路径
-    'source': r"D:\Data\实验结果汇总\识别对比图\C2C12-HEK293\带探针\251223-C2C12-HEK293-86.tif",             # 输入图片路径或文件夹，直接在这里修改
-    'output_dir': r"D:\Data\实验结果汇总\识别对比图\C2C12-HEK293\带探针",      # 结果保存根目录
-    'conf_thres': 0.2,             # 置信度阈值
-    'iou_thres': 0.5,             # IOU阈值
-    'img_size': 640,               # 输入图像尺寸
-    'device': 'cuda:0',                  # 设备选择，空字符串自动选择，'cpu'或'cuda:0'
-    'save_crop': False,            # 是否保存裁剪目标
-    'show_labels': True,           # 是否显示标签
-    'show_conf': True,             # 是否显示置信度
-    'agnostic_nms': False,         # 是否启用类别无关的NMS
-    'classes': None,               # 指定检测类别，None表示全部类别，如[0, 1, 2]
-    'batch_size': 4,               # 批处理大小
-    'result_suffix': '-yolov8nFEB'   # 检测结果图片的自定义后缀，None表示不添加后缀
+    'weights': 'runs/260721前/260107-C2C12-293-YOLOv8n/weights/best.pt',  # model weights file path
+    'source': r"D:\Data\实验结果汇总\识别对比图\C2C12-HEK293\带探针\251223-C2C12-HEK293-86.tif",             # input image path or folder, modify directly here
+    'output_dir': r"D:\Data\实验结果汇总\识别对比图\C2C12-HEK293\带探针",      # root directory for saving results
+    'conf_thres': 0.2,             # confidence threshold
+    'iou_thres': 0.5,             # IoU threshold
+    'img_size': 640,               # input image size
+    'device': 'cuda:0',                  # device selection, empty string auto-selects, 'cpu' or 'cuda:0'
+    'save_crop': False,            # whether to save cropped objects
+    'show_labels': True,           # whether to show labels
+    'show_conf': True,             # whether to show confidence
+    'agnostic_nms': False,         # whether to enable class-agnostic NMS
+    'classes': None,               # specify detection classes, None means all classes, e.g. [0, 1, 2]
+    'batch_size': 4,               # batch size
+    'result_suffix': '-yolov8nFEB'   # custom suffix for detection result images, None means no suffix
 }
 
 class Args:
-    """创建一个模拟命令行参数的类"""
+    """Create a class that simulates command-line arguments"""
     def __init__(self, config):
         self.weights = config['weights']
         self.source = config['source']
@@ -41,62 +41,62 @@ class Args:
         self.result_suffix = config['result_suffix']
 
 def get_image_paths(source_path):
-    """获取所有需要检测的图片路径
+    """Get all image paths that need detection
     Args:
-        source_path: 输入图片路径或文件夹
+        source_path: input image path or folder
     Returns:
-        list: 图片路径列表
+        list: list of image paths
     """
-    # 支持的图片格式
+    # Supported image formats
     image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff']
-    
-    # 如果是文件
+
+    # If it's a file
     if os.path.isfile(source_path):
-        # 检查文件扩展名是否为支持的图片格式
+        # Check whether the file extension is a supported image format
         ext = os.path.splitext(source_path)[1].lower()
         if ext in image_extensions:
             return [source_path]
         else:
-            print(f"警告: 文件 {source_path} 不是支持的图片格式")
+            print(f"Warning: file {source_path} is not a supported image format")
             return []
-    # 如果是文件夹
+    # If it's a folder
     elif os.path.isdir(source_path):
         image_paths = []
-        # 遍历文件夹中的所有支持格式的图片
+        # Iterate over all supported-format images in the folder
         for ext in image_extensions:
-            # 使用glob查找所有匹配扩展名的文件
+            # Use glob to find all files matching the extension
             pattern = os.path.join(source_path, f'*{ext}')
             image_paths.extend(glob.glob(pattern))
-            # 查找子文件夹中的图片
+            # Find images in subfolders
             pattern = os.path.join(source_path, f'**/*{ext}')
             image_paths.extend(glob.glob(pattern, recursive=True))
-        # 去重并排序
+        # Deduplicate and sort
         image_paths = sorted(list(set(image_paths)))
-        print(f"在文件夹 {source_path} 中找到 {len(image_paths)} 张图片")
+        print(f"Found {len(image_paths)} images in folder {source_path}")
         return image_paths
     else:
-        print(f"错误: 路径 {source_path} 不存在")
+        print(f"Error: path {source_path} does not exist")
         return []
 
 def batch_process_images(model, image_paths, args):
-    """批量处理图片
+    """Process images in batches
     Args:
-        model: YOLO模型对象
-        image_paths: 图片路径列表
-        args: 参数对象
+        model: YOLO model object
+        image_paths: list of image paths
+        args: argument object
     """
-    # 创建输出目录
+    # Create output directory
     os.makedirs(args.output, exist_ok=True)
-    
-    print(f"开始处理 {len(image_paths)} 张图片...")
+
+    print(f"Start processing {len(image_paths)} images...")
     start_time = time.time()
-    
-    # 批量处理图片
-    for i in tqdm(range(0, len(image_paths), args.batch_size), desc="处理进度"):
-        # 获取当前批次的图片
+
+    # Process images in batches
+    for i in tqdm(range(0, len(image_paths), args.batch_size), desc="Processing"):
+        # Get the current batch of images
         batch_paths = image_paths[i:i+args.batch_size]
-        
-        # 执行检测
+
+        # Run detection
         results = model(batch_paths,
                         conf=args.conf,
                         iou=args.iou,
@@ -107,93 +107,93 @@ def batch_process_images(model, image_paths, args):
                         show_labels=args.show_labels,
                         show_conf=args.show_conf,
                         project=args.output,
-                        name='',  # 不创建子目录
+                        name='',  # do not create a subdirectory
                         exist_ok=True,
                         imgsz=args.img_size,
                         device=args.device)
-        
-        # 记录每张图片的检测结果并处理自定义后缀
+
+        # Record the detection result for each image and handle the custom suffix
         for img_path, result in zip(batch_paths, results):
             img_name = os.path.basename(img_path)
-            boxes = result.boxes  # 检测框信息
-            
-            # 应用自定义后缀
+            boxes = result.boxes  # detection box info
+
+            # Apply the custom suffix
             if args.result_suffix:
-                # 获取原始文件名和扩展名
+                # Get the original filename and extension
                 base_name, ext = os.path.splitext(img_name)
-                # 构建新文件名
+                # Build the new filename
                 new_name = f"{base_name}{args.result_suffix}{ext}"
-                # 构建完整的源路径和目标路径
+                # Build the full source and destination paths
                 src_path = os.path.join(args.output, img_name)
                 dst_path = os.path.join(args.output, new_name)
-                
-                # 重命名文件
+
+                # Rename the file
                 if os.path.exists(src_path):
                     try:
                         os.rename(src_path, dst_path)
-                        tqdm.write(f"图片 {img_name} 已重命名为 {new_name}")
+                        tqdm.write(f"Image {img_name} renamed to {new_name}")
                     except Exception as e:
-                        tqdm.write(f"重命名图片 {img_name} 时出错: {e}")
-            
+                        tqdm.write(f"Error renaming image {img_name}: {e}")
+
             if len(boxes) > 0:
-                tqdm.write(f"图片 {img_name}: 检测到 {len(boxes)} 个目标")
-    
+                tqdm.write(f"Image {img_name}: detected {len(boxes)} objects")
+
     total_time = time.time() - start_time
-    print(f"\n检测完成！")
-    print(f"总处理时间: {total_time:.2f} 秒")
-    print(f"平均处理速度: {total_time/len(image_paths):.2f} 秒/张")
-    print(f"结果保存在: {os.path.abspath(args.output)}")
+    print(f"\nDetection complete!")
+    print(f"Total processing time: {total_time:.2f} s")
+    print(f"Average processing speed: {total_time/len(image_paths):.2f} s/image")
+    print(f"Results saved in: {os.path.abspath(args.output)}")
 
 def main(config=None):
-    """主函数
+    """Main function
     Args:
-        config: 配置字典，如果为None则使用默认配置
+        config: configuration dict, use the default config if None
     """
-    # 使用传入的配置或默认配置
+    # Use the passed config or the default config
     if config is None:
         config = DEFAULT_CONFIG
-    
-    # 创建参数对象
+
+    # Create the argument object
     args = Args(config)
-    
-    # 验证权重文件是否存在
+
+    # Verify that the weights file exists
     if not os.path.isfile(args.weights):
-        print(f"错误: 权重文件 {args.weights} 不存在")
+        print(f"Error: weights file {args.weights} does not exist")
         return
-    
-    # 验证图片源是否存在
+
+    # Verify that the image source exists
     if not (os.path.isfile(args.source) or os.path.isdir(args.source)):
-        print(f"错误: 图片源 {args.source} 不存在")
+        print(f"Error: image source {args.source} does not exist")
         return
-    
-    # 加载模型
-    print(f"正在加载模型: {args.weights}")
+
+    # Load the model
+    print(f"Loading model: {args.weights}")
     model = YOLO(args.weights)
-    print(f"模型加载完成，使用设备: {model.device}")
-    
-    # 获取图片路径
+    print(f"Model loaded, using device: {model.device}")
+
+    # Get image paths
     image_paths = get_image_paths(args.source)
     if not image_paths:
-        print("没有找到需要检测的图片")
+        print("No images to detect were found")
         return
-    
-    # 批量处理图片
+
+    # Process images in batches
     batch_process_images(model, image_paths, args)
 
 if __name__ == '__main__':
     """
-    直接运行说明：
-    
-    1. 在上方的DEFAULT_CONFIG字典中修改参数
-    2. 直接运行此脚本即可开始检测
-    
-    常用参数说明：
-    - weights: 模型权重文件路径
-    - source: 输入图片路径或文件夹
-    - output_dir: 结果保存目录
-    - conf_thres: 置信度阈值，范围0-1
-    - batch_size: 批处理大小，可根据电脑性能调整
-    - device: 设备选择，'cpu'或'cuda:0'
-    - result_suffix: 检测结果图片的自定义后缀，设置为None表示不添加后缀，默认值为'_detected'
+    Direct run instructions:
+
+    1. Modify the parameters in the DEFAULT_CONFIG dictionary above
+    2. Run this script directly to start detection
+
+    Common parameter descriptions:
+    - weights: model weights file path
+    - source: input image path or folder
+    - output_dir: result save directory
+    - conf_thres: confidence threshold, range 0-1
+    - batch_size: batch size, adjust according to computer performance
+    - device: device selection, 'cpu' or 'cuda:0'
+    - result_suffix: custom suffix for detection result images, None means no suffix, default is '_detected'
     """
     main()

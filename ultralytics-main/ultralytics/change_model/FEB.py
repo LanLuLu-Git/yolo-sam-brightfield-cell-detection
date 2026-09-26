@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 
 
-# 论文题目：Spatial-Frequency Enhanced Mamba for Multi-Modal Image Fusion
-# 论文链接：https://arxiv.org/pdf/2511.06593
-# 官方github：https://github.com/SunHui1216/SFMFusion/blob/main/models/model.py
-# 代码改进者：一勺汤
+# Paper title: Spatial-Frequency Enhanced Mamba for Multi-Modal Image Fusion
+# Paper link: https://arxiv.org/pdf/2511.06593
+# Official GitHub: https://github.com/SunHui1216/SFMFusion/blob/main/models/model.py
+# Code improver: 一勺汤
 
 
 class FB(nn.Module):
@@ -24,37 +24,37 @@ class FB(nn.Module):
             nn.LeakyReLU(0.1, inplace=True),
         )
 
-    def forward(self, x):  # 输入 BCHW 输出 BCHW
-        # 保存原始输入（残差连接用），此时x是BCHW格式
+    def forward(self, x):  # input BCHW output BCHW
+        # Save the original input (for the residual connection); at this point x is in BCHW format
         skip = x  # B C H W
         B, C, H, W = x.shape
 
-        # 第一步：BCHW → BHWC（适配原有逻辑的维度格式）
+        # Step 1: BCHW -> BHWC (to match the dimension format of the original logic)
         x = x.permute(0, 2, 3, 1).contiguous()  # B H W C
 
-        # 第二步：转回BCHW用于卷积和傅里叶变换（原有核心逻辑）
+        # Step 2: convert back to BCHW for convolution and Fourier transform (original core logic)
         x = x.permute(0, 3, 1, 2).contiguous()  # B C H W
-        y = torch.fft.rfft2(x) + 1e-8  # 傅里叶变换（B C H W/2+1，复数）
-        a = torch.abs(y)  # 幅度谱（B C H W/2+1）
-        p = torch.angle(y)  # 相位谱（B C H W/2+1）
+        y = torch.fft.rfft2(x) + 1e-8  # Fourier transform (B C H W/2+1, complex)
+        a = torch.abs(y)  # amplitude spectrum (B C H W/2+1)
+        p = torch.angle(y)  # phase spectrum (B C H W/2+1)
 
-        # 幅度谱和相位谱的特征提取
+        # feature extraction on amplitude and phase spectra
         a = self.select1(a)
         p = self.select2(p)
 
-        # 重构复数域
+        # reconstruct complex domain
         real = a * torch.cos(p)
         imag = a * torch.sin(p)
         out = torch.complex(real, imag) + 1e-8
 
-        # 逆傅里叶变换还原空间域
+        # inverse Fourier transform to restore spatial domain
         out = torch.fft.irfft2(out, s=(H, W), norm='backward') + 1e-8
-        out = torch.abs(out) + 1e-8  # 保证实数输出
+        out = torch.abs(out) + 1e-8  # ensure real output
 
-        # 残差连接（BCHW格式直接相加）
+        # residual connection (added directly in BCHW format)
         out = out + skip  # B C H W
 
-        # 最终输出保持BCHW格式（无需额外维度变换）
+        # final output remains in BCHW format (no extra dimension conversion needed)
         return out
 
 
@@ -168,7 +168,7 @@ class C3k_FEB(C3):
         # self.m = nn.Sequential(*(RepBottleneck(c_, c_, shortcut, g, k=(k, k), e=1.0) for _ in range(n)))
         self.m = nn.Sequential(*(Bottleneck_FEB(c_, c_, shortcut, g, k=(k, k), e=1.0) for _ in range(n)))
 
-# 在c3k=True时，Bottleneck_FEB，为false的时候我们使用普通的Bottleneck提取特征
+# when c3k=True, use Bottleneck_FEB; when false, use the regular Bottleneck for feature extraction
 class C3k2_FEB(C2f):
     """Faster Implementation of CSP Bottleneck with 2 convolutions."""
 
@@ -182,41 +182,41 @@ class C3k2_FEB(C2f):
 
 
 def main():
-    # 1. 设置随机种子，保证结果可复现
+    # 1. Set the random seed to ensure reproducibility
     torch.manual_seed(42)
-    # 自动检测GPU/CPU
+    # automatically detect GPU/CPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"使用设备: {device}")
+    print(f"Using device: {device}")
 
-    # 2. 定义测试超参数（BCHW格式）
-    batch_size = 2  # 批次大小
-    dim = 32  # 通道数
-    height = 64  # 特征图高度
-    width = 64  # 特征图宽度
+    # 2. Define test hyperparameters (BCHW format)
+    batch_size = 2  # batch size
+    dim = 32  # number of channels
+    height = 64  # feature map height
+    width = 64  # feature map width
 
-    # 3. 创建测试输入（BCHW格式，符合PyTorch默认卷积输入格式）
+    # 3. Create the test input (BCHW format, matching PyTorch's default convolution input format)
     test_input = torch.randn(batch_size, dim, height, width).to(device)
-    print(f"\n输入维度 (BCHW): {test_input.shape}")
+    print(f"\nInput shape (BCHW): {test_input.shape}")
 
-    # 4. 初始化FB模块并移至指定设备
+    # 4. Initialize the FB module and move it to the specified device
     fb_module = FB(dim=dim).to(device)
 
-    # 5. 前向传播（禁用梯度计算，节省内存）
+    # 5. Forward pass (disable gradient computation to save memory)
     with torch.no_grad():
         output = fb_module(test_input)
 
-    # 6. 验证输出维度
-    print(f"输出维度 (BCHW): {output.shape}")
-    # 断言输入输出维度一致
-    assert test_input.shape == output.shape, "输入输出维度不一致！"
-    print("✅ 前向传播测试通过，输入输出维度一致！")
+    # 6. Verify the output shape
+    print(f"Output shape (BCHW): {output.shape}")
+    # assert that input and output shapes are consistent
+    assert test_input.shape == output.shape, "Input and output shapes are inconsistent!"
+    print("✅ Forward pass test passed; input and output shapes are consistent!")
 
-    # 7. 输出关键统计信息（辅助调试）
-    print(f"\n输出张量统计信息:")
-    print(f"  均值: {output.mean().item():.4f}")
-    print(f"  最大值: {output.max().item():.4f}")
-    print(f"  最小值: {output.min().item():.4f}")
-    print(f"  标准差: {output.std().item():.4f}")
+    # 7. Print key statistics (for debugging)
+    print(f"\nOutput tensor statistics:")
+    print(f"  Mean: {output.mean().item():.4f}")
+    print(f"  Max: {output.max().item():.4f}")
+    print(f"  Min: {output.min().item():.4f}")
+    print(f"  Std: {output.std().item():.4f}")
 
 
 if __name__ == "__main__":

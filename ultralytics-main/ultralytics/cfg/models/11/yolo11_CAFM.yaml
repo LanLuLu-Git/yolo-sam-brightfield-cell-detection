@@ -27,13 +27,13 @@ backbone:
   - [-1, 1, Conv, [1024, 3, 2]] # 7-P5/32
   - [-1, 2, C3k2, [1024, True]]
   - [-1, 1, SPPF, [1024, 5]] # 9
-  - [-1, 1, CAFM, [1024, 8]] # 10 在Backbone末端添加
+  - [-1, 1, CAFM, [1024, 8]] # 10 added at the end of the Backbone
 
 # YOLO11n head
 head:
   - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
   - [[-1, 6], 1, Concat, [1]] # cat backbone P4
-  - [-1, 1, CAFM, [512, 4]] # 在特征融合后添加 
+  - [-1, 1, CAFM, [512, 4]] # added after feature fusion
   - [-1, 2, C3k2, [512, False]] # 13
 
   - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
@@ -48,7 +48,7 @@ head:
   - [[-1, 10], 1, Concat, [1]] # cat head P5
   - [-1, 2, C3k2, [1024, True]] # 22 (P5/32-large)
 
-   # 在检测头前添加CAFM
+   # Add CAFM before the detection head
   - [16, 1, CAFM, [256, 4]] # 23
   - [19, 1, CAFM, [512, 4]] # 24
   - [22, 1, CAFM, [1024, 8]] # 25

@@ -1,54 +1,54 @@
 import torch
 import torch.nn as nn
-from pytorch_wavelets import DWTForward  # 用于实现离散小波变换（DWT）
+from pytorch_wavelets import DWTForward  # used to implement the discrete wavelet transform (DWT)
 # pip install pywavelets==1.7.0 -i https://pypi.tuna.tsinghua.edu.cn/simple/
 """
-    论文地址：https://arxiv.org/pdf/2405.01992
-    论文题目：SFFNet: A Wavelet-Based Spatial and Frequency Domain Fusion Network for Remote Sensing Segmentation (TOP期刊)
-    中文题目：SFFNet：一种基于小波的空间域与频域融合网络，用于遥感图像分割
-    讲解视频：https://www.bilibili.com/video/BV1GkzZB7EXC/
-    小波变换特征分解器（Wavelet Transform Feature Decomposer, WTFD）：
-        实际意义：①灰度变化敏感区域分割困难：在阴影、边缘、纹理突变处，空间域特征易受光照与背景变化影响，导致边界模糊、类别混淆。
-                ②仅用频域特征会丢失空间结构信息：小波变换/傅里叶方法虽然能捕获灰度突变特征，但会破坏空间位置信息，导致目标形状或语义不完整。
-        实现方式：先对输入空间域特征应用 Haar 小波变换，将其分解为 1 个低频分量（A，对应图像全局平滑信息）和 3 个高频分量（水平、垂直、
-                对角方向的边缘与细节信息），为空间域特征融合提供频域信息支撑。
+    Paper address: https://arxiv.org/pdf/2405.01992
+    Paper title: SFFNet: A Wavelet-Based Spatial and Frequency Domain Fusion Network for Remote Sensing Segmentation (TOP journal)
+    Chinese title: SFFNet: A wavelet-based spatial and frequency domain fusion network for remote sensing image segmentation
+    Tutorial video: https://www.bilibili.com/video/BV1GkzZB7EXC/
+    Wavelet Transform Feature Decomposer (WTFD):
+        Practical significance: ① Grayscale-sensitive regions are hard to segment: in shadow, edge, and texture-transition areas, spatial-domain features are easily affected by illumination and background changes, leading to blurred boundaries and confused categories.
+                ② Using frequency-domain features alone loses spatial structure information: although wavelet transform / Fourier methods can capture grayscale-mutation features, they destroy spatial position information, resulting in incomplete object shapes or semantics.
+        Implementation: first apply the Haar wavelet transform to the input spatial-domain features, decomposing them into 1 low-frequency component (A, corresponding to the global smooth information of the image) and 3 high-frequency components (horizontal, vertical,
+                and diagonal edge/detail information), providing frequency-domain information support for spatial-domain feature fusion.
 """
 
 class WTFD(nn.Module):
     """
-    WTFD：Wavelet Transform Feature Decomposition（小波变换特征分解模块）
-    将输入特征分解为低频（平滑）与高频（边缘/细节）并分别卷积处理。
-    支持上采样以保持输出尺寸与输入一致。
+    WTFD: Wavelet Transform Feature Decomposition (wavelet transform feature decomposition module)
+    Decomposes the input features into low-frequency (smooth) and high-frequency (edge/detail) components and processes them with separate convolutions.
+    Supports upsampling to keep the output size consistent with the input.
     """
     def __init__(self, in_ch, out_ch, upsample=True, fusion=True):
         super(WTFD, self).__init__()
         self.upsample = upsample
         self.fusion = fusion
-        # 1 层 Haar 小波分解
+        # 1-level Haar wavelet decomposition
         self.wt = DWTForward(J=1, mode='zero', wave='haar')
 
-        # 高频分支：HL/LH/HH 拼成 3*in_ch 通道 -> 1x1 降回 in_ch
+        # high-frequency branch: HL/LH/HH concatenated into 3*in_ch channels -> 1x1 to reduce back to in_ch
         self.conv_bn_relu = nn.Sequential(
             nn.Conv2d(in_ch * 3, in_ch, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(in_ch),
             nn.ReLU(inplace=True),
         )
 
-        # 低频输出通道对齐
+        # low-frequency output channel alignment
         self.outconv_bn_relu_L = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
         )
 
-        # 高频输出通道对齐
+        # high-frequency output channel alignment
         self.outconv_bn_relu_H = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
         )
 
-        # 融合后的输出通道对齐（当fusion=True时使用）
+        # fused output channel alignment (used when fusion=True)
         self.outconv_bn_relu_F = nn.Sequential(
             nn.Conv2d(out_ch * 2, out_ch, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(out_ch),
@@ -56,36 +56,36 @@ class WTFD(nn.Module):
         )
 
     def forward(self, x):
-        """ 前向传播逻辑：
-            输入 x -> 小波分解 -> 高频拼接 -> 卷积融合 -> 输出低频与高频特征
-            如果 upsample=True，则将输出上采样回原始尺寸
-            如果 fusion=True，则融合低频和高频特征并输出单一特征图
+        """ Forward propagation logic:
+            Input x -> wavelet decomposition -> high-frequency concatenation -> convolution fusion -> output low- and high-frequency features
+            If upsample=True, the outputs are upsampled back to the original size
+            If fusion=True, the low- and high-frequency features are fused and a single feature map is output
          """
-        # 使用小波变换进行特征分解 # yL: 低频部分（平滑信息）
-        # yH: 高频部分（包含3个方向的细节信息）
+        # use the wavelet transform for feature decomposition # yL: low-frequency part (smooth information)
+        # yH: high-frequency part (contains detail information in 3 directions)
         yL, yH = self.wt(x)
 
-        # 从高频系数中提取3个方向分量：HL（水平方向）、LH（垂直方向）、HH（对角方向）
+        # extract the 3 directional components from the high-frequency coefficients: HL (horizontal), LH (vertical), HH (diagonal)
         yH0 = yH[0]                 # [B, C, 3, H2, W2]
         y_HL = yH0[:, :, 0, :, :]   # [B, C, H2, W2]
         y_LH = yH0[:, :, 1, :, :]
         y_HH = yH0[:, :, 2, :, :]
-        # # 沿通道维拼接三个方向的高频信息
+        # # concatenate the high-frequency information of the three directions along the channel dimension
         yH_cat = torch.cat([y_HL, y_LH, y_HH], dim=1)  # [B, 3*C, H2, W2]
-        # 对拼接后的高频特征进行卷积 + BN + ReLU
+        # apply convolution + BN + ReLU to the concatenated high-frequency features
         yH_feat = self.conv_bn_relu(yH_cat)            # [B, C, H2, W2]
 
-        # 分别对低频与高频特征进行输出卷积处理
+        # apply output convolutions to the low- and high-frequency features separately
         yL_out = self.outconv_bn_relu_L(yL)           # [B, out_ch, H2, W2]
         yH_out = self.outconv_bn_relu_H(yH_feat)      # [B, out_ch, H2, W2]
 
-        # 如果需要上采样，将输出恢复到原始尺寸
+        # if upsampling is needed, restore the output to the original size
         if self.upsample:
             original_size = x.shape[2:]
             yL_out = nn.functional.interpolate(yL_out, size=original_size, mode='bilinear', align_corners=False)
             yH_out = nn.functional.interpolate(yH_out, size=original_size, mode='bilinear', align_corners=False)
 
-        # 如果需要融合，将低频和高频特征融合后输出
+        # if fusion is needed, fuse the low- and high-frequency features and output
         if self.fusion:
             yF_out = torch.cat([yL_out, yH_out], dim=1)  # [B, 2*out_ch, H, W]
             yF_out = self.outconv_bn_relu_F(yF_out)     # [B, out_ch, H, W]
@@ -94,31 +94,31 @@ class WTFD(nn.Module):
         return yL_out, yH_out
 
 if __name__ == "__main__":
-    # 输入的 H、W 建议为偶数，以适配 1 层小波下采样
+    # It is recommended that the input H and W be even to accommodate the 1-level wavelet downsampling
     x = torch.randn(1, 32, 50, 50)
-    
-    # 测试融合版本（用于YOLOv8集成）
-    print("=== 测试融合版本（fusion=True, upsample=True）===")
+
+    # test the fusion version (for YOLOv8 integration)
+    print("=== Test the fusion version (fusion=True, upsample=True) ===")
     model = WTFD(32, 32, upsample=True, fusion=True)
     out = model(x)
-    print(f"输入张量形状: {x.shape}")
-    print(f"融合输出张量形状: {out.shape}")
-    
-    # 测试非融合版本
-    print("\n=== 测试非融合版本（fusion=False, upsample=True）===")
+    print(f"Input tensor shape: {x.shape}")
+    print(f"Fused output tensor shape: {out.shape}")
+
+    # test the non-fusion version
+    print("\n=== Test the non-fusion version (fusion=False, upsample=True) ===")
     model2 = WTFD(32, 32, upsample=True, fusion=False)
     out_L, out_H = model2(x)
-    print(f"输入张量形状: {x.shape}")
-    print(f"低频输出张量形状: {out_L.shape}")
-    print(f"高频输出张量形状: {out_H.shape}")
-    
-    # 测试不上采样版本
-    print("\n=== 测试不上采样版本（fusion=False, upsample=False）===")
+    print(f"Input tensor shape: {x.shape}")
+    print(f"Low-frequency output tensor shape: {out_L.shape}")
+    print(f"High-frequency output tensor shape: {out_H.shape}")
+
+    # test the no-upsampling version
+    print("\n=== Test the no-upsampling version (fusion=False, upsample=False) ===")
     model3 = WTFD(32, 32, upsample=False, fusion=False)
     out_L2, out_H2 = model3(x)
-    print(f"输入张量形状: {x.shape}")
-    print(f"低频输出张量形状: {out_L2.shape}")
-    print(f"高频输出张量形状: {out_H2.shape}")
-    
-    print("\n微信公众号、B站、CSDN同号")
-    print("布尔大学士 提醒您：代码无误~~~~")
+    print(f"Input tensor shape: {x.shape}")
+    print(f"Low-frequency output tensor shape: {out_L2.shape}")
+    print(f"High-frequency output tensor shape: {out_H2.shape}")
+
+    print("\nSame WeChat official account, Bilibili, and CSDN account")
+    print("布尔大学士 reminds you: the code is error-free~~~~")

@@ -247,7 +247,7 @@ class C3k(C3):
         # self.m = nn.Sequential(*(RepBottleneck(c_, c_, shortcut, g, k=(k, k), e=1.0) for _ in range(n)))
         self.m = nn.Sequential(*(Bottleneck_DI_SpAM(c_, c_, shortcut, g, k=(k, k), e=1.0) for _ in range(n)))
 
-# 在c3k=True时，使用Bottleneck_LLSKM特征融合，为false的时候我们使用普通的Bottleneck提取特征
+# when c3k=True, use Bottleneck_LLSKM feature fusion; when false, use the regular Bottleneck for feature extraction
 class C3k2_DI_SpAM(C2f):
     """Faster Implementation of CSP Bottleneck with 2 convolutions."""
 
@@ -262,27 +262,27 @@ class C3k2_DI_SpAM(C2f):
 
 
 def main():
-    # 设置随机种子以便结果可复现
+    # set the random seed for reproducible results
     torch.manual_seed(42)
 
-    # 创建模型实例
+    # create the model instance
     model = DI_SpAM(c=64, DW_Expand=2, FFN_Expand=2, dilations=[1, 2, 3], extra_depth_wise=True)
 
-    # 创建随机输入张量 [batch_size, channels, height, width]
+    # create a random input tensor [batch_size, channels, height, width]
     input_tensor = torch.randn(1, 64, 27, 31)
 
-    # 前向传播
+    # forward pass
     with torch.no_grad():
         output = model(input_tensor)
 
-    # 打印输入输出形状
-    print(f"输入形状: {input_tensor.shape}")
-    print(f"输出形状: {output.shape}")
+    # print input and output shapes
+    print(f"Input shape: {input_tensor.shape}")
+    print(f"Output shape: {output.shape}")
 
-    # 验证输出形状是否符合预期
-    assert output.shape == input_tensor.shape, "输出形状与输入形状不匹配"
+    # verify whether the output shape meets expectations
+    assert output.shape == input_tensor.shape, "Output shape does not match the input shape"
 
-    print("模型前向传播测试成功！")
+    print("Model forward pass test successful!")
 
 if __name__ == "__main__":
     main()

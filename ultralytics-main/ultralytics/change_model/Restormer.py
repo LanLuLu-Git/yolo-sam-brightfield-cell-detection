@@ -6,100 +6,100 @@ from einops import rearrange
 # https://github.com/slrl123/BSAFusion/blob/main/modal_2d/Restormer.py
 # https://arxiv.org/pdf/2412.08050
 
-# 多尺度动态注意力模块（MDTA）
+# Multi-scale dynamic attention module (MDTA)
 class MDTA(nn.Module):
     def __init__(self, out_c):
         super(MDTA, self).__init__()
-        # 第一个卷积块，用于生成查询（query）
+        # first convolution block, used to generate the query
         self.conv1 = nn.Sequential(
-            nn.Conv2d(out_c, out_c, 1, 1, 0),  # 1x1卷积
-            nn.Conv2d(out_c, out_c, 3, 1, 1)   # 3x3卷积
+            nn.Conv2d(out_c, out_c, 1, 1, 0),  # 1x1 convolution
+            nn.Conv2d(out_c, out_c, 3, 1, 1)   # 3x3 convolution
         )
-        # 第二个卷积块，用于生成键（key）
+        # second convolution block, used to generate the key
         self.conv2 = nn.Sequential(
-            nn.Conv2d(out_c, out_c, 1, 1, 0),  # 1x1卷积
-            nn.Conv2d(out_c, out_c, 3, 1, 1)   # 3x3卷积
+            nn.Conv2d(out_c, out_c, 1, 1, 0),  # 1x1 convolution
+            nn.Conv2d(out_c, out_c, 3, 1, 1)   # 3x3 convolution
         )
-        # 第三个卷积块，用于生成值（value）
+        # third convolution block, used to generate the value
         self.conv3 = nn.Sequential(
-            nn.Conv2d(out_c, out_c, 1, 1, 0),  # 1x1卷积
-            nn.Conv2d(out_c, out_c, 3, 1, 1)   # 3x3卷积
+            nn.Conv2d(out_c, out_c, 1, 1, 0),  # 1x1 convolution
+            nn.Conv2d(out_c, out_c, 3, 1, 1)   # 3x3 convolution
         )
-        # 最后一个1x1卷积，用于调整输出特征图的通道数
+        # last 1x1 convolution, used to adjust the number of channels of the output feature map
         self.conv4 = nn.Conv2d(out_c, out_c, 1, 1, 0)
 
     def forward(self, x):
-        x_o = x  # 保存输入，用于残差连接
-        x = F.layer_norm(x, x.shape[-2:])  # 对输入进行层归一化
-        C, W, H = x.size()[1], x.size()[2], x.size()[3]  # 获取通道数、宽度和高度
+        x_o = x  # save the input for the residual connection
+        x = F.layer_norm(x, x.shape[-2:])  # apply layer normalization to the input
+        C, W, H = x.size()[1], x.size()[2], x.size()[3]  # get the number of channels, width, and height
 
-        # 生成查询
+        # generate the query
         q = self.conv1(x)
-        q = rearrange(q, 'b c w h -> b (w h) c')  # 调整维度
+        q = rearrange(q, 'b c w h -> b (w h) c')  # adjust dimensions
 
-        # 生成键
+        # generate the key
         k = self.conv2(x)
-        k = rearrange(k, 'b c w h -> b c (w h)')  # 调整维度
+        k = rearrange(k, 'b c w h -> b c (w h)')  # adjust dimensions
 
-        # 生成值
+        # generate the value
         v = self.conv3(x)
-        v = rearrange(v, 'b c w h -> b (w h) c')  # 调整维度
+        v = rearrange(v, 'b c w h -> b (w h) c')  # adjust dimensions
 
-        # 计算注意力矩阵
+        # compute the attention matrix
         A = torch.matmul(k, q)
         A = rearrange(A, 'b c1 c2 -> b (c1 c2)', c1=C, c2=C)
-        A = torch.softmax(A, dim=1)  # 对注意力矩阵进行softmax操作
+        A = torch.softmax(A, dim=1)  # apply softmax to the attention matrix
         A = rearrange(A, 'b (c1 c2) -> b c1 c2', c1=C, c2=C)
 
-        # 计算加权值
+        # compute the weighted value
         v = torch.matmul(v, A)
-        # v = rearrange(v, 'b (h w) c -> b c h w', c=C, h=H, w=W)  # 调整维度
-        v = rearrange(v, 'b (h w) c -> b c w h', c=C, w=W, h=H)  # 调整维度
+        # v = rearrange(v, 'b (h w) c -> b c h w', c=C, h=H, w=W)  # adjust dimensions
+        v = rearrange(v, 'b (h w) c -> b c w h', c=C, w=W, h=H)  # adjust dimensions
 
-        # 残差连接
+        # residual connection
         return self.conv4(v) + x_o
 
-# 门控深度前馈网络（GDFN）
+# Gated depthwise feed-forward network (GDFN)
 class GDFN(nn.Module):
     def __init__(self, out_c):
         super(GDFN, self).__init__()
-        # 第一个卷积块，用于生成第一个特征图
+        # first convolution block, used to generate the first feature map
         self.Dconv1 = nn.Sequential(
-            nn.Conv2d(out_c, out_c * 4, 1, 1, 0),  # 1x1卷积，通道数扩展4倍
-            nn.Conv2d(out_c * 4, out_c * 4, 3, 1, 1)  # 3x3卷积
+            nn.Conv2d(out_c, out_c * 4, 1, 1, 0),  # 1x1 convolution, channels expanded 4x
+            nn.Conv2d(out_c * 4, out_c * 4, 3, 1, 1)  # 3x3 convolution
         )
-        # 第二个卷积块，用于生成第二个特征图
+        # second convolution block, used to generate the second feature map
         self.Dconv2 = nn.Sequential(
-            nn.Conv2d(out_c, out_c * 4, 1, 1, 0),  # 1x1卷积，通道数扩展4倍
-            nn.Conv2d(out_c * 4, out_c * 4, 3, 1, 1)  # 3x3卷积
+            nn.Conv2d(out_c, out_c * 4, 1, 1, 0),  # 1x1 convolution, channels expanded 4x
+            nn.Conv2d(out_c * 4, out_c * 4, 3, 1, 1)  # 3x3 convolution
         )
-        # 最后一个1x1卷积，用于将通道数恢复到原始大小
+        # last 1x1 convolution, used to restore the number of channels to the original size
         self.conv = nn.Conv2d(out_c * 4, out_c, 1, 1, 0)
 
     def forward(self, x):
-        x_o = x  # 保存输入，用于残差连接
-        x = F.layer_norm(x, x.shape[-2:])  # 对输入进行层归一化
-        # 应用GELU激活函数并进行逐元素相乘
+        x_o = x  # save the input for the residual connection
+        x = F.layer_norm(x, x.shape[-2:])  # apply layer normalization to the input
+        # apply the GELU activation function and perform element-wise multiplication
         x = F.gelu(self.Dconv1(x)) * self.Dconv2(x)
-        # 残差连接
+        # residual connection
         x = x_o + self.conv(x)
         return x
 
-# Restormer模型
+# Restormer model
 class Restormer(nn.Module):
     def __init__(self, in_c, out_c):
         super(Restormer, self).__init__()
-        # 1x1卷积，用于调整输入特征图的通道数
+        # 1x1 convolution, used to adjust the number of channels of the input feature map
         self.mlp = nn.Conv2d(in_c, out_c, 1, 1, 0)
-        # 多尺度动态注意力模块
+        # multi-scale dynamic attention module
         self.mdta = MDTA(out_c)
-        # 门控深度前馈网络
+        # gated depthwise feed-forward network
         self.gdfn = GDFN(out_c)
 
     def forward(self, feature):
-        feature = self.mlp(feature)  # 调整通道数
-        feature = self.mdta(feature)  # 应用多尺度动态注意力模块
-        return self.gdfn(feature)  # 应用门控深度前馈网络
+        feature = self.mlp(feature)  # adjust the number of channels
+        feature = self.mdta(feature)  # apply the multi-scale dynamic attention module
+        return self.gdfn(feature)  # apply the gated depthwise feed-forward network
 
 
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
@@ -173,14 +173,14 @@ class C2f_Restormer(nn.Module):
 
 if __name__ == "__main__":
 
-    # 随机生成输入特征图
+    # randomly generate the input feature map
     input_feature = torch.randn(8, 32, 27, 33)
-    # 初始化Restormer模型
+    # initialize the Restormer model
     model = Restormer(in_c=32, out_c=64)
-    # 进行前向传播
+    # run the forward pass
     output = model(input_feature)
-    print(f"输入特征图形状: {input_feature.shape}")
-    print(f"输出特征图形状: {output.shape}")
+    print(f"Input feature map shape: {input_feature.shape}")
+    print(f"Output feature map shape: {output.shape}")
 
 
 

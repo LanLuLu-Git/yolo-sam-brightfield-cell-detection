@@ -1,54 +1,54 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-YOLO 批量评估脚本 — 使用训练后的权重对测试图片文件夹进行批量检测，
-统计 Precision、Recall、F1-score、mAP、FPS 等指标。
+YOLO batch evaluation script — batch-detect a test image folder using trained weights,
+and compute metrics such as Precision, Recall, F1-score, mAP, and FPS.
 
 ============================================================
-⚠️ 重要说明（请先阅读）
+⚠️ Important notes (please read first)
 ============================================================
- Precision、Recall、F1-score 需要对比预测结果与真实标注 (ground truth)
- 才能计算。本脚本支持两种模式:
+ Precision, Recall, and F1-score require comparing predictions against ground truth
+ annotations in order to be computed. This script supports two modes:
 
- 模式 A（有标注）: 图片 + 标注文件
-   → 支持两种标注格式:
-     • YOLO 格式 (.txt):   class_id cx cy w h (归一化坐标)
-     • Pascal VOC 格式 (.xml): <annotation> → <object> → <name> + <bndbox>
-     通过 labels_format 参数指定: 'txt', 'xml', 或 'auto' (自动检测)
-   → 输出完整指标: P, R, F1, mAP50, mAP50-95, 混淆矩阵, FPS
+ Mode A (with annotations): images + annotation files
+   → Supports two annotation formats:
+     • YOLO format (.txt):  class_id cx cy w h (normalized coordinates)
+     • Pascal VOC format (.xml): <annotation> → <object> → <name> + <bndbox>
+     Specify via the labels_format parameter: 'txt', 'xml', or 'auto' (auto-detect)
+   → Outputs full metrics: P, R, F1, mAP50, mAP50-95, confusion matrix, FPS
 
- 模式 B（无标注）: 仅图片
-   → 输出: FPS 基准测试 + 各类检测数量统计
+ Mode B (without annotations): images only
+   → Outputs: FPS benchmark + per-class detection count statistics
 
- 脚本会自动检测标签文件夹。检测顺序:
-   1. CONFIG 中 'labels' 参数指定的路径
-   2. {source}/labels/ 子文件夹 (YOLO 格式)
-   3. {source}/annotations/ 子文件夹 (Pascal VOC 格式)
-   4. source 文件夹自身（图片和标签混放）
+ The script auto-detects the label folder. Detection order:
+   1. Path specified by the 'labels' parameter in CONFIG
+   2. {source}/labels/ subfolder (YOLO format)
+   3. {source}/annotations/ subfolder (Pascal VOC format)
+   4. The source folder itself (images and labels mixed together)
 
 ============================================================
-使用方式
+Usage
 ============================================================
 
- 方式 1 — 直接修改 CONFIG 字典，然后运行:
+ Method 1 — Edit the CONFIG dictionary directly, then run:
     python batch_evaluate.py
 
- 方式 2 — 命令行参数（会覆盖 CONFIG 中的对应设置）:
+ Method 2 — Command-line arguments (override the corresponding CONFIG settings):
     python batch_evaluate.py --weights best.pt --source Data/test/ --conf 0.5
 
 ============================================================
-标注格式说明
+Annotation format description
 ============================================================
 
- YOLO 格式 (.txt):
-   每行一个目标: class_id cx cy w h
-     - class_id: 类别编号 (整数, 从 0 开始)
-     - cx, cy:   边界框中心点坐标 (归一化, 0~1)
-     - w, h:     边界框宽高 (归一化, 0~1)
-   文件名与图片名相同, 扩展名为 .txt
-   例如: image_001.jpg 对应 image_001.txt
+ YOLO format (.txt):
+   One object per line: class_id cx cy w h
+     - class_id: class index (integer, starting from 0)
+     - cx, cy:   bounding-box center coordinates (normalized, 0~1)
+     - w, h:     bounding-box width and height (normalized, 0~1)
+   Filename matches the image name, extension .txt
+   e.g. image_001.jpg corresponds to image_001.txt
 
- Pascal VOC 格式 (.xml):
+ Pascal VOC format (.xml):
    <annotation>
      <filename>image_001.jpg</filename>
      <size><width>640</width><height>480</height></size>
@@ -60,8 +60,8 @@ YOLO 批量评估脚本 — 使用训练后的权重对测试图片文件夹进�
        </bndbox>
      </object>
    </annotation>
-   文件名与图片名相同, 扩展名为 .xml
-   例如: image_001.jpg 对应 image_001.xml
+   Filename matches the image name, extension .xml
+   e.g. image_001.jpg corresponds to image_001.xml
 ============================================================
 """
 
@@ -88,50 +88,50 @@ from ultralytics.utils.metrics import (
 )
 
 # ============================================================================
-# 默认配置 — 在这里修改参数即可运行，无需命令行
+# Default config — modify parameters here to run, no command line needed
 # ============================================================================
 
 DEFAULT_CONFIG = {
-    # --- 模型 ---
-    'weights': R'runs\detect\260726-MCF7-MCF10A-FEB\weights\best.pt',   # 训练好的模型权重路径 (.pt)
-    # --- 数据 ---
-    'source': R'D:\Data\徐庭臣训练数据集\mcf7-mcf10a-260414\val\images',  # 测试图片文件夹路径
-    'labels': R'D:\Data\徐庭臣训练数据集\mcf7-mcf10a-260414\val\labels',  # 标签文件夹路径 (None=自动检测)
-    'labels_format': 'auto',                               # 标注格式: 'txt', 'xml', 'auto' (自动检测)
-    # --- 检测参数 ---
-    'conf_thres': 0.3,                                 # 置信度阈值 (0~1)
-    'iou_thres': 0.5,                                  # NMS 的 IoU 阈值 (0~1)
-    'img_size': 640,                                   # 输入图像尺寸
-    'batch_size': 4,                                   # 批处理大小
-    'device': '',                                      # 设备: ''=自动, 'cpu', 'cuda:0'
-    # --- 输出 ---
-    'output_dir': 'Data\测试对比',            # 结果保存目录
-    'save_annotated': False,                           # 是否保存带检测框的图片
+    # --- Model ---
+    'weights': R'runs\detect\260726-MCF7-MCF10A-FEB\weights\best.pt',   # Trained model weights path (.pt)
+    # --- Data ---
+    'source': R'D:\Data\徐庭臣训练数据集\mcf7-mcf10a-260414\val\images',  # Test image folder path
+    'labels': R'D:\Data\徐庭臣训练数据集\mcf7-mcf10a-260414\val\labels',  # Label folder path (None=auto-detect)
+    'labels_format': 'auto',                               # Annotation format: 'txt', 'xml', 'auto' (auto-detect)
+    # --- Detection parameters ---
+    'conf_thres': 0.3,                                 # Confidence threshold (0~1)
+    'iou_thres': 0.5,                                  # NMS IoU threshold (0~1)
+    'img_size': 640,                                   # Input image size
+    'batch_size': 4,                                   # Batch size
+    'device': '',                                      # Device: ''=auto, 'cpu', 'cuda:0'
+    # --- Output ---
+    'output_dir': 'Data\测试对比',            # Result save directory
+    'save_annotated': False,                           # Whether to save images with detection boxes
     'save_format': 'csv',                              # 'csv', 'json', 'both'
-    'output_prefix': 'MCF7-MCF10A-FEB-',                      # 输出文件名前缀 (如 'yolov8n_' → 'yolov8n_evaluation_metrics.csv')
-    'warmup_iterations': 5,                            # GPU 预热迭代次数
+    'output_prefix': 'MCF7-MCF10A-FEB-',                      # Output filename prefix (e.g. 'yolov8n_' → 'yolov8n_evaluation_metrics.csv')
+    'warmup_iterations': 5,                            # GPU warmup iteration count
 }
 
-# 支持的图片格式
+# Supported image formats
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
 
 
 # ============================================================================
-# 辅助函数
+# Helper functions
 # ============================================================================
 
 def get_image_paths(source_path: str) -> List[str]:
-    """获取文件夹中所有图片路径，递归搜索子文件夹。
+    """Get all image paths in a folder, searching subfolders recursively.
 
     Args:
-        source_path: 图片文件夹路径
+        source_path: image folder path
 
     Returns:
-        排序后的图片路径列表
+        sorted list of image paths
     """
     source_path = os.path.abspath(source_path)
     if not os.path.isdir(source_path):
-        raise FileNotFoundError(f"图片文件夹不存在: {source_path}")
+        raise FileNotFoundError(f"Image folder does not exist: {source_path}")
 
     image_paths = []
     for root, _, files in os.walk(source_path):
@@ -141,45 +141,45 @@ def get_image_paths(source_path: str) -> List[str]:
                 image_paths.append(os.path.join(root, f))
 
     if not image_paths:
-        raise FileNotFoundError(f"文件夹中未找到支持的图片 ({source_path})")
+        raise FileNotFoundError(f"No supported images found in folder ({source_path})")
 
     return sorted(image_paths)
 
 
 def find_labels_folder(source_dir: str, labels_config: Optional[str]) -> Optional[str]:
-    """自动检测标签文件夹的位置。
+    """Auto-detect the location of the label folder.
 
-    检测顺序:
-        1. labels_config 指定的路径
-        2. {source_dir}/labels/ 子文件夹
-        3. {source_dir}/annotations/ 子文件夹 (Pascal VOC 格式)
-        4. source_dir 自身
+    Detection order:
+        1. Path specified by labels_config
+        2. {source_dir}/labels/ subfolder
+        3. {source_dir}/annotations/ subfolder (Pascal VOC format)
+        4. source_dir itself
 
     Args:
-        source_dir: 图片源文件夹
-        labels_config: 用户配置的 labels 参数
+        source_dir: image source folder
+        labels_config: user-configured labels parameter
 
     Returns:
-        找到的标签文件夹路径，或 None
+        the found label folder path, or None
     """
-    # 1. 用户显式指定的路径
+    # 1. Path explicitly specified by the user
     if labels_config and os.path.isdir(labels_config):
         return os.path.abspath(labels_config)
     if labels_config:
-        print(f"  警告: 指定的标签文件夹不存在: {labels_config}")
+        print(f"  Warning: the specified label folder does not exist: {labels_config}")
 
-    # 2. source/labels/ 子文件夹 (YOLO 格式)
+    # 2. source/labels/ subfolder (YOLO format)
     labels_subdir = os.path.join(source_dir, 'labels')
     if os.path.isdir(labels_subdir):
         return labels_subdir
 
-    # 3. source/annotations/ 子文件夹 (Pascal VOC 格式)
+    # 3. source/annotations/ subfolder (Pascal VOC format)
     annotations_subdir = os.path.join(source_dir, 'annotations')
     if os.path.isdir(annotations_subdir):
         return annotations_subdir
 
-    # 4. source 自身（图片和标签混放）
-    # 检查 source 下是否有 .txt 或 .xml 标注文件
+    # 4. source itself (images and labels mixed together)
+    # Check whether there are .txt or .xml annotation files under source
     txt_files = glob.glob(os.path.join(source_dir, '*.txt'))
     xml_files = glob.glob(os.path.join(source_dir, '*.xml'))
     if txt_files or xml_files:
@@ -189,35 +189,35 @@ def find_labels_folder(source_dir: str, labels_config: Optional[str]) -> Optiona
 
 
 def detect_label_format(labels_dir: str, labels_format_config: Optional[str] = None) -> Optional[str]:
-    """检测标注文件夹中的标注格式。
+    """Detect the annotation format in the annotation folder.
 
     Args:
-        labels_dir: 标签文件夹路径
-        labels_format_config: 用户配置的格式 ('txt', 'xml', 'auto', None)
+        labels_dir: label folder path
+        labels_format_config: user-configured format ('txt', 'xml', 'auto', None)
 
     Returns:
-        'txt' — YOLO 格式标注
-        'xml' — Pascal VOC 格式标注
-        None — 无法检测到任何标注文件
+        'txt' — YOLO format annotations
+        'xml' — Pascal VOC format annotations
+        None — unable to detect any annotation files
     """
-    # 用户显式指定格式
+    # Format explicitly specified by the user
     if labels_format_config and labels_format_config != 'auto':
         fmt = labels_format_config.lower()
         if fmt in ('txt', 'xml'):
-            # 验证指定格式的标注文件是否存在
+            # Verify that annotation files of the specified format exist
             pattern = os.path.join(labels_dir, f'*.{fmt}')
             if glob.glob(pattern):
                 return fmt
-            print(f"  警告: 指定格式 '{fmt}' 但在 {labels_dir} 中未找到 .{fmt} 文件")
+            print(f"  Warning: specified format '{fmt}' but no .{fmt} files were found in {labels_dir}")
         else:
-            print(f"  警告: 未知的 labels_format '{labels_format_config}'，将自动检测")
+            print(f"  Warning: unknown labels_format '{labels_format_config}', will auto-detect")
 
-    # 自动检测
+    # Auto-detect
     txt_files = glob.glob(os.path.join(labels_dir, '*.txt'))
     xml_files = glob.glob(os.path.join(labels_dir, '*.xml'))
 
     if txt_files and xml_files:
-        # 两者都存在时优先使用数量多的格式
+        # When both exist, prefer the format with more files
         if len(txt_files) >= len(xml_files):
             return 'txt'
         else:
@@ -231,19 +231,19 @@ def detect_label_format(labels_dir: str, labels_format_config: Optional[str] = N
 
 
 def load_yolo_labels(label_path: str, img_width: int, img_height: int) -> Tuple[np.ndarray, np.ndarray]:
-    """加载 YOLO 格式标注文件，转换为绝对坐标 (xyxy)。
+    """Load a YOLO format annotation file and convert to absolute coordinates (xyxy).
 
-    YOLO 格式: class_id cx cy w h  (归一化坐标)
+    YOLO format: class_id cx cy w h  (normalized coordinates)
 
     Args:
-        label_path: .txt 标注文件路径
-        img_width: 原始图片宽度
-        img_height: 原始图片高度
+        label_path: .txt annotation file path
+        img_width: original image width
+        img_height: original image height
 
     Returns:
         (classes, boxes_xyxy):
-            classes:  形状 (M,),  dtype=int — 类别ID
-            boxes:    形状 (M, 4), dtype=float32 — 绝对坐标 [x1, y1, x2, y2]
+            classes:  shape (M,),  dtype=int — class IDs
+            boxes:    shape (M, 4), dtype=float32 — absolute coordinates [x1, y1, x2, y2]
     """
     if not os.path.isfile(label_path):
         return np.array([], dtype=int), np.empty((0, 4), dtype=np.float32)
@@ -279,9 +279,9 @@ def load_xml_labels(
     label_path: str,
     class_name_to_id: Dict[str, int],
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """加载 Pascal VOC XML 格式标注文件，返回绝对坐标 (xyxy)。
+    """Load a Pascal VOC XML format annotation file and return absolute coordinates (xyxy).
 
-    XML 格式:
+    XML format:
       <annotation>
         <object>
           <name>class_name</name>
@@ -292,16 +292,16 @@ def load_xml_labels(
         </object>
       </annotation>
 
-    坐标已经是像素绝对坐标, 无需转换。
+    The coordinates are already absolute pixel coordinates, no conversion needed.
 
     Args:
-        label_path: .xml 标注文件路径
-        class_name_to_id: 类别名称到 ID 的映射, 如 {'cell': 0, 'nucleus': 1}
+        label_path: .xml annotation file path
+        class_name_to_id: mapping from class name to ID, e.g. {'cell': 0, 'nucleus': 1}
 
     Returns:
         (classes, boxes_xyxy):
-            classes:  形状 (M,),  dtype=int — 类别ID
-            boxes:    形状 (M, 4), dtype=float32 — 绝对坐标 [x1, y1, x2, y2]
+            classes:  shape (M,),  dtype=int — class IDs
+            boxes:    shape (M, 4), dtype=float32 — absolute coordinates [x1, y1, x2, y2]
     """
     if not os.path.isfile(label_path):
         return np.array([], dtype=int), np.empty((0, 4), dtype=np.float32)
@@ -311,24 +311,24 @@ def load_xml_labels(
         tree = ET.parse(label_path)
         root = tree.getroot()
     except ET.ParseError:
-        print(f"  警告: XML 解析失败: {label_path}")
+        print(f"  Warning: XML parsing failed: {label_path}")
         return np.array([], dtype=int), np.empty((0, 4), dtype=np.float32)
 
     for obj in root.iter('object'):
-        # 跳过困难样本 (difficult=1)
+        # Skip difficult samples (difficult=1)
         diff = obj.find('difficult')
         if diff is not None and diff.text is not None and diff.text.strip() == '1':
             continue
 
-        # 类别名称
+        # Class name
         name_el = obj.find('name')
         if name_el is None or name_el.text is None:
             continue
         cls_name = name_el.text.strip()
 
-        # 将类别名称映射为 ID
+        # Map the class name to an ID
         if cls_name not in class_name_to_id:
-            # 尝试模糊匹配 (去除空格、大小写不敏感)
+            # Try fuzzy matching (remove spaces, case-insensitive)
             cls_name_lower = cls_name.lower().replace(' ', '')
             matched = False
             for known_name, known_id in class_name_to_id.items():
@@ -337,12 +337,12 @@ def load_xml_labels(
                     matched = True
                     break
             if not matched:
-                # 未知类别，跳过
+                # Unknown class, skip
                 continue
         else:
             cls_id = class_name_to_id[cls_name]
 
-        # 边界框
+        # Bounding box
         bbox_el = obj.find('bndbox')
         if bbox_el is None:
             continue
@@ -355,7 +355,7 @@ def load_xml_labels(
         except (AttributeError, ValueError):
             continue
 
-        # 基本校验
+        # Basic validation
         if xmax <= xmin or ymax <= ymin:
             continue
 
@@ -374,42 +374,42 @@ def match_predictions(
     iou: torch.Tensor,
     iou_thresholds: torch.Tensor,
 ) -> np.ndarray:
-    """将预测框匹配到真实标注框，生成 tp 矩阵。
+    """Match predicted boxes to ground-truth boxes and generate the tp matrix.
 
-    复现 ultralytics BaseValidator.match_predictions() 的逻辑。
-    对每个 IoU 阈值，找到 (gt, pred) 匹配对，标记为正确预测。
+    Reproduces the logic of ultralytics BaseValidator.match_predictions().
+    For each IoU threshold, find (gt, pred) matching pairs and mark them as correct.
 
     Args:
-        pred_classes: 预测类别, 形状 (N,)
-        gt_classes:   真实类别, 形状 (M,)
-        iou:          IoU 矩阵, 形状 (M, N) — gt_boxes 与 pred_boxes 的成对 IoU
-        iou_thresholds: IoU 阈值向量, 形状 (K,)  — 默认 10 个 [0.5, 0.55, ..., 0.95]
+        pred_classes: predicted classes, shape (N,)
+        gt_classes:   ground-truth classes, shape (M,)
+        iou:          IoU matrix, shape (M, N) — pairwise IoU between gt_boxes and pred_boxes
+        iou_thresholds: IoU threshold vector, shape (K,) — default 10 values [0.5, 0.55, ..., 0.95]
 
     Returns:
-        correct: 形状 (N, K) 的布尔数组, correct[i, j]=True 表示第 i 个预测在第 j 个
-                 IoU 阈值下与某个真实标注匹配成功
+        correct: boolean array of shape (N, K); correct[i, j]=True means the i-th prediction
+                 matched some ground-truth annotation under the j-th IoU threshold
     """
     K = len(iou_thresholds)
     N = pred_classes.shape[0]
     correct = np.zeros((N, K), dtype=bool)
 
-    # (M, N) — 类别匹配矩阵
-    correct_class = gt_classes[:, None] == pred_classes  # 广播
-    iou = iou * correct_class  # 将类别不匹配的 IoU 清零
+    # (M, N) — class match matrix
+    correct_class = gt_classes[:, None] == pred_classes  # broadcast
+    iou = iou * correct_class  # Zero out IoU for class mismatches
     iou_np = iou.cpu().numpy()
 
     for j, threshold in enumerate(iou_thresholds.cpu().tolist()):
-        # 找到所有 IoU >= 阈值的 (gt_idx, pred_idx) 对
+        # Find all (gt_idx, pred_idx) pairs with IoU >= threshold
         matches = np.nonzero(iou_np >= threshold)
         matches = np.array(matches).T
         if matches.shape[0] == 0:
             continue
         if matches.shape[0] > 1:
-            # 按 IoU 降序排列
+            # Sort by IoU in descending order
             matches = matches[iou_np[matches[:, 0], matches[:, 1]].argsort()[::-1]]
-            # 去重: 每个预测框只能匹配一个 GT
+            # Deduplicate: each predicted box can only match one GT
             matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
-            # 去重: 每个 GT 也只能匹配一个预测框
+            # Deduplicate: each GT can only match one predicted box
             matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
         correct[matches[:, 1].astype(int), j] = True
 
@@ -417,23 +417,23 @@ def match_predictions(
 
 
 # ============================================================================
-# BatchEvaluator 类
+# BatchEvaluator class
 # ============================================================================
 
 class BatchEvaluator:
-    """YOLO 批量评估器。
+    """YOLO batch evaluator.
 
-    根据是否有标注文件自动选择:
-      - 模式 A (有标注): 计算完整指标 (P, R, F1, mAP, FPS, 混淆矩阵)
-        支持 YOLO .txt 和 Pascal VOC .xml 两种标注格式
-      - 模式 B (无标注): 仅测 FPS + 检测统计
+    Automatically selects based on whether annotation files exist:
+      - Mode A (with annotations): compute full metrics (P, R, F1, mAP, FPS, confusion matrix)
+        Supports both YOLO .txt and Pascal VOC .xml annotation formats
+      - Mode B (without annotations): measure FPS only + detection statistics
     """
 
     def __init__(self, config: Dict):
-        """初始化评估器。
+        """Initialize the evaluator.
 
         Args:
-            config: 配置字典, 参见 DEFAULT_CONFIG
+            config: configuration dict, see DEFAULT_CONFIG
         """
         self.config = config
         self.weights = config['weights']
@@ -449,54 +449,54 @@ class BatchEvaluator:
         self.warmup_iters = config['warmup_iterations']
         self.labels_format_config = config.get('labels_format', 'auto') or 'auto'
 
-        # 设备处理: '' 或 None → 自动选择 GPU > CPU
+        # Device handling: '' or None → auto-select GPU > CPU
         raw_device = config.get('device', '') or ''
         if raw_device.strip():
             self.device_str = raw_device.strip()
         else:
             self.device_str = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
-        # 验证路径
+        # Validate paths
         if not os.path.isfile(self.weights):
-            raise FileNotFoundError(f"模型权重文件不存在: {self.weights}")
+            raise FileNotFoundError(f"Model weights file does not exist: {self.weights}")
         if not os.path.isdir(self.source):
-            raise FileNotFoundError(f"图片源文件夹不存在: {self.source}")
+            raise FileNotFoundError(f"Image source folder does not exist: {self.source}")
 
-        # 加载模型
-        print(f"正在加载模型: {self.weights}")
+        # Load the model
+        print(f"Loading model: {self.weights}")
         self.model = YOLO(self.weights)
-        # 将模型移到目标设备
+        # Move the model to the target device
         if self.device_str != 'cpu' and torch.cuda.is_available():
             self.model.model.to(self.device_str)
         self.device = next(self.model.model.parameters()).device
-        print(f"模型加载完成, 使用设备: {self.device}")
+        print(f"Model loaded, using device: {self.device}")
 
-        # 获取类别名称
+        # Get class names
         self.names = self.model.names  # {0: 'class0', 1: 'class1', ...}
         self.nc = len(self.names)
 
-        # 构建反向映射: 类别名称 → ID (用于 XML 解析)
+        # Build reverse mapping: class name → ID (for XML parsing)
         self.class_name_to_id = {name: idx for idx, name in self.names.items()}
 
-        # IoU 阈值 (COCO 标准: 0.5 到 0.95, 步长 0.05)
+        # IoU thresholds (COCO standard: 0.5 to 0.95, step 0.05)
         self.iouv = torch.linspace(0.5, 0.95, 10)
 
-        # 创建输出目录
+        # Create output directory
         os.makedirs(self.output_dir, exist_ok=True)
 
-        # 统计变量
+        # Statistics variables
         self._reset_stats()
 
-        # 标注格式 (在 detect_mode 时确定)
+        # Annotation format (determined in detect_mode)
         self._detected_label_format: Optional[str] = None
 
     def _reset_stats(self):
-        """重置统计变量。"""
+        """Reset the statistics variables."""
         self.stats = {
-            'tp': [],           # 各图片的 tp 矩阵列表
-            'conf': [],         # 各图片的置信度列表
-            'pred_cls': [],     # 各图片的预测类别列表
-            'target_cls': [],   # 各图片的真实类别列表
+            'tp': [],           # List of tp matrices per image
+            'conf': [],         # List of confidence scores per image
+            'pred_cls': [],     # List of predicted classes per image
+            'target_cls': [],   # List of ground-truth classes per image
         }
         self.image_count = 0
         self.total_targets = 0
@@ -505,22 +505,22 @@ class BatchEvaluator:
         self.total_postprocess_time = 0.0
 
     # ------------------------------------------------------------------
-    # 模式检测
+    # Mode detection
     # ------------------------------------------------------------------
 
     def detect_mode(self, image_paths: List[str]) -> str:
-        """检测应使用哪种评估模式，同时自动检测标注格式。
+        """Detect which evaluation mode to use, and auto-detect the annotation format.
 
         Returns:
-            'A' — 有标注文件，可计算完整指标
-            'B' — 无标注文件，仅测 FPS
+            'A' — has annotation files, full metrics can be computed
+            'B' — no annotation files, measure FPS only
         """
         labels_dir = find_labels_folder(self.source, self.config.get('labels'))
         if labels_dir is None:
             self._detected_label_format = None
             return 'B'
 
-        # 检测标注格式
+        # Detect annotation format
         fmt = detect_label_format(labels_dir, self.labels_format_config)
         if fmt is None:
             self._detected_label_format = None
@@ -528,10 +528,10 @@ class BatchEvaluator:
 
         self._detected_label_format = fmt
 
-        # 检查至少有一张图片有对应格式的标注文件
+        # Check that at least one image has an annotation file of the matching format
         ext = f'.{fmt}'
         has_labels = False
-        for img_path in image_paths[:10]:  # 抽查前 10 张
+        for img_path in image_paths[:10]:  # Spot-check the first 10 images
             stem = os.path.splitext(os.path.basename(img_path))[0]
             label_path = os.path.join(labels_dir, f"{stem}{ext}")
             if os.path.isfile(label_path):
@@ -541,25 +541,26 @@ class BatchEvaluator:
         return 'A' if has_labels else 'B'
 
     # ------------------------------------------------------------------
-    # 标签加载
+    # Label loading
     # ------------------------------------------------------------------
 
     def _resolve_label_path(self, img_path: str, labels_dir: str) -> str:
-        """根据图片路径找到对应的标注文件路径。
+        """Find the corresponding annotation file path based on the image path.
 
-        根据检测到的标注格式 (.txt 或 .xml) 返回正确扩展名的路径。
+        Returns the path with the correct extension based on the detected annotation
+        format (.txt or .xml).
         """
         stem = os.path.splitext(os.path.basename(img_path))[0]
         ext = f".{self._detected_label_format}" if self._detected_label_format else '.txt'
         return os.path.join(labels_dir, f"{stem}{ext}")
 
     def _load_labels(self, label_path: str, img_width: int, img_height: int) -> Tuple[np.ndarray, np.ndarray]:
-        """根据检测到的标注格式加载标注文件。
+        """Load the annotation file based on the detected annotation format.
 
         Args:
-            label_path: 标注文件路径
-            img_width: 图片宽度 (仅 YOLO 格式需要)
-            img_height: 图片高度 (仅 YOLO 格式需要)
+            label_path: annotation file path
+            img_width: image width (only needed for YOLO format)
+            img_height: image height (only needed for YOLO format)
 
         Returns:
             (classes, boxes_xyxy)
@@ -567,67 +568,67 @@ class BatchEvaluator:
         if self._detected_label_format == 'xml':
             return load_xml_labels(label_path, self.class_name_to_id)
         else:
-            # 默认使用 YOLO 格式
+            # Default to YOLO format
             return load_yolo_labels(label_path, img_width, img_height)
 
     # ------------------------------------------------------------------
-    # 预热
+    # Warmup
     # ------------------------------------------------------------------
 
     def _warmup(self, image_paths: List[str]):
-        """用前几张图片预热 GPU（消除首次推理的额外开销）。"""
+        """Warm up the GPU with the first few images (eliminate the extra overhead of the first inference)."""
         warmup_imgs = image_paths[:min(self.warmup_iters, len(image_paths))]
         if not warmup_imgs:
             return
-        print(f"正在预热 GPU ({len(warmup_imgs)} 次迭代)...")
+        print(f"Warming up GPU ({len(warmup_imgs)} iterations)...")
         for img_path in warmup_imgs:
             _ = self.model(img_path, imgsz=self.img_size, conf=self.conf_thres,
                            iou=self.iou_thres, device=self.device_str, verbose=False)
 
     # ------------------------------------------------------------------
-    # 模式 A: 完整评估 (有标注)
+    # Mode A: full evaluation (with annotations)
     # ------------------------------------------------------------------
 
     def evaluate_with_labels(self, image_paths: List[str], labels_dir: str):
-        """执行模式 A 评估 — 计算完整指标。
+        """Run Mode A evaluation — compute full metrics.
 
-        对每张图片:
-          1. 模型推理
-          2. 提取预测框 (xyxy, conf, cls)
-          3. 加载真实标注 (xyxy, cls) — 自动适配 YOLO/TXT 或 VOC/XML 格式
-          4. 计算 IoU 并匹配 → tp 矩阵
-          5. 累积统计数据
+        For each image:
+          1. Model inference
+          2. Extract predicted boxes (xyxy, conf, cls)
+          3. Load ground-truth annotations (xyxy, cls) — auto-adapt YOLO/TXT or VOC/XML format
+          4. Compute IoU and match → tp matrix
+          5. Accumulate statistics
         """
         label_fmt = self._detected_label_format or 'txt'
         fmt_name = {'txt': 'YOLO (.txt)', 'xml': 'Pascal VOC (.xml)'}.get(label_fmt, label_fmt)
 
         print(f"\n{'=' * 60}")
-        print(f"模式 A — 完整指标评估 (有标注)")
-        print(f"图片文件夹: {self.source}")
-        print(f"标签文件夹: {labels_dir}")
-        print(f"标注格式:   {fmt_name}")
-        print(f"图片数量:   {len(image_paths)}")
-        print(f"置信度阈值: {self.conf_thres}")
-        print(f"IoU 阈值:   {self.iou_thres}")
-        print(f"批处理大小: {self.batch_size}")
+        print(f"Mode A — full metric evaluation (with annotations)")
+        print(f"Image folder: {self.source}")
+        print(f"Label folder: {labels_dir}")
+        print(f"Annotation format: {fmt_name}")
+        print(f"Number of images: {len(image_paths)}")
+        print(f"Confidence threshold: {self.conf_thres}")
+        print(f"IoU threshold: {self.iou_thres}")
+        print(f"Batch size: {self.batch_size}")
         print(f"{'=' * 60}\n")
 
-        # 预热
+        # Warmup
         self._warmup(image_paths)
 
-        # 初始化混淆矩阵
+        # Initialize confusion matrix
         confusion_matrix = ConfusionMatrix(nc=self.nc, conf=self.conf_thres)
 
-        # 计时统计
+        # Timing statistics
         total_inference_ms = 0.0
 
-        # ---- 逐批处理 ----
+        # ---- Batch-by-batch processing ----
         pbar = tqdm(range(0, len(image_paths), self.batch_size),
-                    desc="评估进度", unit="batch")
+                    desc="Evaluating", unit="batch")
         for batch_start in pbar:
             batch_paths = image_paths[batch_start:batch_start + self.batch_size]
 
-            # 1. 批量推理并计时
+            # 1. Batch inference with timing
             t0 = time.perf_counter()
             results = self.model(
                 batch_paths,
@@ -642,15 +643,15 @@ class BatchEvaluator:
             batch_inference_ms = (t1 - t0) * 1000.0
             total_inference_ms += batch_inference_ms
 
-            # 2. 逐张图片处理
+            # 2. Process image by image
             for img_path, result in zip(batch_paths, results):
                 self.image_count += 1
                 boxes = result.boxes
-                img_h, img_w = result.orig_shape  # 原始图片尺寸
+                img_h, img_w = result.orig_shape  # Original image size
 
-                # 提取预测 — 确定预测张量所在设备
+                # Extract predictions — determine the device of the prediction tensors
                 if boxes is not None and len(boxes) > 0:
-                    pred_xyxy = boxes.xyxy  # (N, 4) — 已在原始坐标空间
+                    pred_xyxy = boxes.xyxy  # (N, 4) — already in original coordinate space
                     pred_conf = boxes.conf   # (N,)
                     pred_cls = boxes.cls     # (N,)
                     pred_device = pred_xyxy.device
@@ -662,7 +663,7 @@ class BatchEvaluator:
 
                 n_pred = len(pred_cls)
 
-                # 加载真实标注 — 自动适配 YOLO/TXT 或 VOC/XML 格式
+                # Load ground-truth annotations — auto-adapt YOLO/TXT or VOC/XML format
                 label_path = self._resolve_label_path(img_path, labels_dir)
                 gt_cls_np, gt_xyxy_np = self._load_labels(label_path, img_w, img_h)
                 gt_cls = torch.from_numpy(gt_cls_np).to(pred_device)
@@ -671,25 +672,25 @@ class BatchEvaluator:
 
                 self.total_targets += n_gt
 
-                # 初始化该图片的 tp 矩阵
+                # Initialize the tp matrix for this image
                 tp = torch.zeros(n_pred, len(self.iouv), dtype=torch.bool, device=pred_device)
 
                 if n_pred > 0 and n_gt > 0:
-                    # 计算成对 IoU — 两个张量已在同一设备
+                    # Compute pairwise IoU — the two tensors are already on the same device
                     iou = box_iou(gt_xyxy, pred_xyxy)  # (M, N)
-                    # 匹配预测到真实标注
+                    # Match predictions to ground-truth annotations
                     tp_np = match_predictions(
                         pred_cls, gt_cls, iou, self.iouv.to(pred_device),
                     )
                     tp = torch.from_numpy(tp_np).to(pred_device)
 
-                # 累积统计 (保存到 CPU 以节省显存，最终汇总时再转)
+                # Accumulate statistics (save to CPU to save GPU memory, convert back during final aggregation)
                 self.stats['tp'].append(tp.cpu())
                 self.stats['conf'].append(pred_conf.cpu())
                 self.stats['pred_cls'].append(pred_cls.cpu())
                 self.stats['target_cls'].append(gt_cls.cpu())
 
-                # 更新混淆矩阵
+                # Update confusion matrix
                 if n_pred > 0 or n_gt > 0:
                     pred_for_cm = None
                     if n_pred > 0:
@@ -700,30 +701,30 @@ class BatchEvaluator:
                         gt_cls.cpu(),
                     )
 
-                # 更新进度条信息
+                # Update progress bar info
                 pbar.set_postfix({
-                    '图片': self.image_count,
-                    '目标': self.total_targets,
-                    '速度': f'{batch_inference_ms / len(batch_paths):.1f}ms/张'
+                    'images': self.image_count,
+                    'targets': self.total_targets,
+                    'speed': f'{batch_inference_ms / len(batch_paths):.1f}ms/img'
                 })
 
-            # 可选：保存标注图片
+            # Optional: save annotated images
             if self.save_annotated:
                 for r in results:
                     save_path = os.path.join(self.output_dir, os.path.basename(r.path))
                     r.save(filename=save_path)
 
-        # ---- 汇总统计 ----
+        # ---- Aggregate statistics ----
         pbar.close()
-        print(f"\n正在计算指标...")
+        print(f"\nComputing metrics...")
 
-        # 拼接所有统计量
+        # Concatenate all statistics
         tp_all = torch.cat(self.stats['tp'], dim=0).cpu().numpy()
         conf_all = torch.cat(self.stats['conf'], dim=0).cpu().numpy()
         pred_cls_all = torch.cat(self.stats['pred_cls'], dim=0).cpu().numpy()
         target_cls_all = torch.cat(self.stats['target_cls'], dim=0).cpu().numpy()
 
-        # 计算 FPS
+        # Compute FPS
         avg_inference_ms = total_inference_ms / max(self.image_count, 1)
         fps = 1000.0 / avg_inference_ms if avg_inference_ms > 0 else 0.0
 
@@ -736,14 +737,14 @@ class BatchEvaluator:
             'device': str(self.device),
         }
 
-        # 如果没有检测结果
+        # If there are no detection results
         if len(conf_all) == 0:
-            print("\n⚠️  模型未在任何图片上检测到目标，无法计算指标。")
-            print("   请尝试降低 conf_thres 参数。")
+            print("\n⚠️  The model did not detect any objects in any image, so metrics cannot be computed.")
+            print("   Please try lowering the conf_thres parameter.")
             self._print_fps_only(speed_info)
             return {'speed': speed_info, 'metrics': None}
 
-        # 调用 ap_per_class 计算指标
+        # Call ap_per_class to compute metrics
         tp_out, fp_out, p, r, f1, ap, ap_class, p_curve, r_curve, f1_curve, x, prec_values = \
             ap_per_class(
                 tp_all, conf_all, pred_cls_all, target_cls_all,
@@ -752,14 +753,14 @@ class BatchEvaluator:
                 names=self.names,
             )
 
-        # 构建结构化结果
+        # Build structured results
         results_data = {
             'speed': speed_info,
             'per_class': {},
             'mean': {},
         }
 
-        # 每类指标
+        # Per-class metrics
         ap50_per_class = ap[:, 0]  # AP@IoU=0.5
         ap_per_class_mean = ap.mean(1)  # mAP@0.5:0.95
 
@@ -779,7 +780,7 @@ class BatchEvaluator:
                 'fp': int(fp_out[i]),
             }
 
-        # 总体均值
+        # Overall mean
         results_data['mean'] = {
             'precision': round(float(p.mean()), 4),
             'recall': round(float(r.mean()), 4),
@@ -790,46 +791,46 @@ class BatchEvaluator:
             'total_instances': self.total_targets,
         }
 
-        # 混淆矩阵
+        # Confusion matrix
         results_data['confusion_matrix'] = confusion_matrix.matrix.tolist()
 
-        # 打印结果
+        # Print results
         self._print_mode_a_results(results_data, ap_class)
         self._export_results(results_data)
 
         return results_data
 
     # ------------------------------------------------------------------
-    # 模式 B: FPS 基准测试 (无标注)
+    # Mode B: FPS benchmark (without annotations)
     # ------------------------------------------------------------------
 
     def evaluate_without_labels(self, image_paths: List[str]):
-        """执行模式 B 评估 — FPS 基准测试。
+        """Run Mode B evaluation — FPS benchmark.
 
-        对图片进行批量推理，测量速度并统计各类检测数量。
+        Perform batch inference on the images, measure speed and count detections per class.
         """
         print(f"\n{'=' * 60}")
-        print(f"模式 B — FPS 基准测试 (无标注)")
-        print(f"图片文件夹: {self.source}")
-        print(f"图片数量:   {len(image_paths)}")
-        print(f"置信度阈值: {self.conf_thres}")
-        print(f"批处理大小: {self.batch_size}")
+        print(f"Mode B — FPS benchmark (without annotations)")
+        print(f"Image folder: {self.source}")
+        print(f"Number of images: {len(image_paths)}")
+        print(f"Confidence threshold: {self.conf_thres}")
+        print(f"Batch size: {self.batch_size}")
         print(f"{'=' * 60}\n")
 
-        # 预热
+        # Warmup
         self._warmup(image_paths)
 
-        # 统计
+        # Statistics
         total_inference_ms = 0.0
         per_class_counts = {self.names.get(i, f'class_{i}'): 0 for i in range(self.nc)}
 
-        # ---- 逐批处理 ----
+        # ---- Batch-by-batch processing ----
         pbar = tqdm(range(0, len(image_paths), self.batch_size),
-                    desc="推理进度", unit="batch")
+                    desc="Inference", unit="batch")
         for batch_start in pbar:
             batch_paths = image_paths[batch_start:batch_start + self.batch_size]
 
-            # 推理并计时
+            # Inference with timing
             t0 = time.perf_counter()
             results = self.model(
                 batch_paths,
@@ -843,7 +844,7 @@ class BatchEvaluator:
             t1 = time.perf_counter()
             total_inference_ms += (t1 - t0) * 1000.0
 
-            # 统计检测结果
+            # Count detection results
             for result in results:
                 self.image_count += 1
                 if result.boxes is not None and len(result.boxes) > 0:
@@ -851,7 +852,7 @@ class BatchEvaluator:
                         cls_name = self.names.get(cls_id, f'class_{cls_id}')
                         per_class_counts[cls_name] += 1
 
-            # 可选：保存标注图片
+            # Optional: save annotated images
             if self.save_annotated:
                 for r in results:
                     save_path = os.path.join(self.output_dir, os.path.basename(r.path))
@@ -859,7 +860,7 @@ class BatchEvaluator:
 
         pbar.close()
 
-        # ---- 计算 FPS ----
+        # ---- Compute FPS ----
         avg_inference_ms = total_inference_ms / max(self.image_count, 1)
         fps = 1000.0 / avg_inference_ms if avg_inference_ms > 0 else 0.0
 
@@ -877,100 +878,100 @@ class BatchEvaluator:
             'per_class_counts': per_class_counts,
         }
 
-        # 打印结果
+        # Print results
         self._print_mode_b_results(results_data)
         self._export_results(results_data)
 
         return results_data
 
     # ------------------------------------------------------------------
-    # 输出: 控制台打印
+    # Output: console printing
     # ------------------------------------------------------------------
 
     def _print_mode_a_results(self, results_data: Dict, ap_class: np.ndarray):
-        """打印模式 A 的完整指标表格。"""
+        """Print the full metric table for Mode A."""
         speed = results_data['speed']
         mean = results_data['mean']
 
         print(f"\n{'=' * 70}")
-        print(f"  批量评估结果 — 完整指标 (模式 A)")
+        print(f"  Batch evaluation results — full metrics (Mode A)")
         print(f"{'=' * 70}")
-        print(f"  模型:       {os.path.basename(self.weights)}")
-        print(f"  图片数:     {mean['total_images']}")
-        print(f"  总实例数:   {mean['total_instances']}")
-        print(f"  置信度:     {self.conf_thres}")
+        print(f"  Model:      {os.path.basename(self.weights)}")
+        print(f"  Images:     {mean['total_images']}")
+        print(f"  Total instances: {mean['total_instances']}")
+        print(f"  Confidence: {self.conf_thres}")
         print(f"  NMS IoU:    {self.iou_thres}")
         print(f"{'-' * 70}")
 
-        # 表头
-        header = f"  {'类别':<14s} {'实例数':>7s} {'P':>8s} {'R':>8s} {'F1':>8s} {'mAP50':>8s} {'mAP50-95':>9s}"
+        # Table header
+        header = f"  {'Class':<14s} {'Instances':>7s} {'P':>8s} {'R':>8s} {'F1':>8s} {'mAP50':>8s} {'mAP50-95':>9s}"
         print(header)
         print(f"  {'-' * 66}")
 
-        # 每类行
+        # Per-class rows
         per_class = results_data['per_class']
         for cls_name in sorted(per_class.keys()):
             d = per_class[cls_name]
             print(f"  {cls_name:<14s} {d['instances']:>7d} {d['precision']:>8.4f} "
                   f"{d['recall']:>8.4f} {d['f1']:>8.4f} {d['ap50']:>8.4f} {d['ap50_95']:>9.4f}")
 
-        # 总体均值行
+        # Overall mean row
         print(f"  {'-' * 66}")
-        print(f"  {'总体 (mean)':<14s} {mean['total_instances']:>7d} {mean['precision']:>8.4f} "
+        print(f"  {'Overall (mean)':<14s} {mean['total_instances']:>7d} {mean['precision']:>8.4f} "
               f"{mean['recall']:>8.4f} {mean['f1']:>8.4f} {mean['mAP50']:>8.4f} {mean['mAP50_95']:>9.4f}")
 
-        # 速度
+        # Speed
         print(f"{'-' * 70}")
-        print(f"  推理速度:")
-        print(f"    总时间:       {speed['total_time_s']:.2f} 秒")
-        print(f"    平均/张:      {speed['avg_inference_ms']:.1f} ms")
-        print(f"    FPS:          {speed['fps']:.1f} 张/秒")
-        print(f"    批次大小:     {speed['batch_size']}")
-        print(f"    设备:         {speed['device']}")
+        print(f"  Inference speed:")
+        print(f"    Total time:     {speed['total_time_s']:.2f} s")
+        print(f"    Avg per image:  {speed['avg_inference_ms']:.1f} ms")
+        print(f"    FPS:           {speed['fps']:.1f} images/s")
+        print(f"    Batch size:    {speed['batch_size']}")
+        print(f"    Device:        {speed['device']}")
         print(f"{'-' * 70}")
-        print(f"  结果已保存至: {self.output_dir}")
+        print(f"  Results saved to: {self.output_dir}")
         print(f"{'=' * 70}\n")
 
     def _print_mode_b_results(self, results_data: Dict):
-        """打印模式 B 的 FPS 和检测统计。"""
+        """Print FPS and detection statistics for Mode B."""
         speed = results_data['speed']
         counts = results_data['per_class_counts']
 
         print(f"\n{'=' * 70}")
-        print(f"  FPS 基准测试结果 (模式 B — 无标注)")
+        print(f"  FPS benchmark results (Mode B — without annotations)")
         print(f"{'=' * 70}")
-        print(f"  模型:       {os.path.basename(self.weights)}")
-        print(f"  图片数:     {speed['num_images']}")
-        print(f"  置信度:     {self.conf_thres}")
-        print(f"  批次大小:   {speed['batch_size']}")
+        print(f"  Model:      {os.path.basename(self.weights)}")
+        print(f"  Images:     {speed['num_images']}")
+        print(f"  Confidence: {self.conf_thres}")
+        print(f"  Batch size: {speed['batch_size']}")
         print(f"{'-' * 70}")
-        print(f"  推理速度:")
-        print(f"    总时间:       {speed['total_time_s']:.2f} 秒")
-        print(f"    平均/张:      {speed['avg_inference_ms']:.1f} ms")
-        print(f"    FPS:          {speed['fps']:.1f} 张/秒")
-        print(f"    设备:         {speed['device']}")
+        print(f"  Inference speed:")
+        print(f"    Total time:     {speed['total_time_s']:.2f} s")
+        print(f"    Avg per image:  {speed['avg_inference_ms']:.1f} ms")
+        print(f"    FPS:           {speed['fps']:.1f} images/s")
+        print(f"    Device:        {speed['device']}")
         print(f"{'-' * 70}")
-        print(f"  各类检测数量:")
+        print(f"  Detection counts per class:")
         for cls_name, count in sorted(counts.items()):
             if count > 0:
                 print(f"    {cls_name:<20s}: {count:>6d}")
         print(f"{'-' * 70}")
-        print(f"  结果已保存至: {self.output_dir}")
+        print(f"  Results saved to: {self.output_dir}")
         print(f"{'=' * 70}\n")
 
     def _print_fps_only(self, speed_info: Dict):
-        """无检测时仅打印速度信息。"""
-        print(f"\n  推理速度 (无检测结果):")
-        print(f"    总时间:       {speed_info['total_time_s']:.2f} 秒")
-        print(f"    平均/张:      {speed_info['avg_inference_ms']:.1f} ms")
-        print(f"    FPS:          {speed_info['fps']:.1f} 张/秒")
+        """Print only speed information when there are no detections."""
+        print(f"\n  Inference speed (no detections):")
+        print(f"    Total time:     {speed_info['total_time_s']:.2f} s")
+        print(f"    Avg per image:  {speed_info['avg_inference_ms']:.1f} ms")
+        print(f"    FPS:           {speed_info['fps']:.1f} images/s")
 
     # ------------------------------------------------------------------
-    # 输出: 文件导出
+    # Output: file export
     # ------------------------------------------------------------------
 
     def _export_results(self, results_data: Dict):
-        """导出结果到 CSV 和/或 JSON 文件。"""
+        """Export results to CSV and/or JSON files."""
         fmt = self.save_format.lower()
 
         if fmt in ('csv', 'both'):
@@ -980,10 +981,10 @@ class BatchEvaluator:
             self._export_json(results_data)
 
     def _export_csv(self, results_data: Dict):
-        """导出结果到 CSV 文件。"""
-        pf = self.output_prefix  # 前缀
+        """Export results to a CSV file."""
+        pf = self.output_prefix  # prefix
 
-        # 模式 A 的结果
+        # Mode A results
         if 'per_class' in results_data and results_data['per_class']:
             csv_path = os.path.join(self.output_dir, f'{pf}evaluation_metrics.csv')
             fieldnames = ['class', 'instances', 'precision', 'recall', 'f1', 'ap50', 'ap50_95']
@@ -1000,10 +1001,10 @@ class BatchEvaluator:
                         'ap50': d['ap50'],
                         'ap50_95': d['ap50_95'],
                     })
-                # 总体均值行
+                # Overall mean row
                 mean = results_data['mean']
                 writer.writerow({
-                    'class': '总体(mean)',
+                    'class': 'Overall (mean)',
                     'instances': mean['total_instances'],
                     'precision': mean['precision'],
                     'recall': mean['recall'],
@@ -1011,9 +1012,9 @@ class BatchEvaluator:
                     'ap50': mean['mAP50'],
                     'ap50_95': mean['mAP50_95'],
                 })
-            print(f"  CSV 指标文件: {csv_path}")
+            print(f"  CSV metrics file: {csv_path}")
 
-        # 速度信息 (两种模式都有)
+        # Speed info (available in both modes)
         csv_speed_path = os.path.join(self.output_dir, f'{pf}evaluation_speed.csv')
         speed = results_data['speed']
         with open(csv_speed_path, 'w', newline='', encoding='utf-8-sig') as f:
@@ -1025,14 +1026,14 @@ class BatchEvaluator:
             writer.writerow(['total_time_s', f"{speed['total_time_s']:.4f}"])
             writer.writerow(['avg_inference_ms', f"{speed['avg_inference_ms']:.2f}"])
             writer.writerow(['fps', f"{speed['fps']:.2f}"])
-        print(f"  CSV 速度文件: {csv_speed_path}")
+        print(f"  CSV speed file: {csv_speed_path}")
 
     def _export_json(self, results_data: Dict):
-        """导出结果到 JSON 文件。"""
+        """Export results to a JSON file."""
         pf = self.output_prefix
         json_path = os.path.join(self.output_dir, f'{pf}evaluation_results.json')
 
-        # 转换 numpy 类型为 Python 原生类型
+        # Convert numpy types to native Python types
         def convert(obj):
             if isinstance(obj, (np.integer,)):
                 return int(obj)
@@ -1048,108 +1049,108 @@ class BatchEvaluator:
 
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(convert(results_data), f, ensure_ascii=False, indent=2)
-        print(f"  JSON 结果文件: {json_path}")
+        print(f"  JSON results file: {json_path}")
 
     # ------------------------------------------------------------------
-    # 主入口
+    # Main entry point
     # ------------------------------------------------------------------
 
     def run(self) -> Dict:
-        """执行评估流程。自动检测模式和标注格式并运行。"""
-        # 1. 获取图片列表
-        print(f"\n正在扫描图片文件夹: {self.source}")
+        """Run the evaluation workflow. Auto-detect the mode and annotation format and execute."""
+        # 1. Get the image list
+        print(f"\nScanning image folder: {self.source}")
         image_paths = get_image_paths(self.source)
-        print(f"找到 {len(image_paths)} 张图片")
+        print(f"Found {len(image_paths)} images")
 
-        # 2. 检测模式 (同时检测标注格式)
+        # 2. Detect mode (also detect annotation format)
         mode = self.detect_mode(image_paths)
         labels_dir = find_labels_folder(self.source, self.config.get('labels'))
 
-        # 3. 执行评估
+        # 3. Run evaluation
         if mode == 'A' and labels_dir:
             fmt_name = {'txt': 'YOLO (.txt)', 'xml': 'Pascal VOC (.xml)'}.get(
                 self._detected_label_format, self._detected_label_format)
-            print(f"检测到标签文件夹: {labels_dir}")
-            print(f"检测到标注格式:   {fmt_name}")
+            print(f"Detected label folder: {labels_dir}")
+            print(f"Detected annotation format: {fmt_name}")
             return self.evaluate_with_labels(image_paths, labels_dir)
         else:
-            print("\n⚠️  未检测到标注文件，将使用模式 B (仅测 FPS)")
+            print("\n⚠️  No annotation files detected, will use Mode B (FPS only)")
             if labels_dir:
-                print(f"   标签文件夹存在 ({labels_dir}) 但没有与图片匹配的标注文件")
+                print(f"   Label folder exists ({labels_dir}) but has no annotation files matching the images")
             else:
-                print(f"   未找到标签文件夹。检查了: "
+                print(f"   No label folder found. Checked: "
                       f"{self.config.get('labels') or 'N/A'}、"
                       f"{os.path.join(self.source, 'labels')}、"
                       f"{os.path.join(self.source, 'annotations')}、"
                       f"{self.source}")
-            print("   如需计算 P/R/F1/mAP，请确保每张图片有对应的 .txt (YOLO) 或 .xml (Pascal VOC) 标注文件。\n")
+            print("   To compute P/R/F1/mAP, make sure each image has a corresponding .txt (YOLO) or .xml (Pascal VOC) annotation file.\n")
             return self.evaluate_without_labels(image_paths)
 
 
 # ============================================================================
-# 命令行参数解析
+# Command-line argument parsing
 # ============================================================================
 
 def parse_args() -> Dict:
-    """解析命令行参数，返回覆盖 CONFIG 的字典。"""
+    """Parse command-line arguments and return a dict that overrides CONFIG."""
     parser = argparse.ArgumentParser(
-        description='YOLO 批量评估脚本 — 统计 Precision, Recall, F1, FPS 等指标',
+        description='YOLO batch evaluation script — compute Precision, Recall, F1, FPS and other metrics',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用示例:
+Examples:
   python batch_evaluate.py --weights best.pt --source Data/test/ --conf 0.5
   python batch_evaluate.py --weights best.pt --source Data/test/ --labels Data/labels/ --batch 8
   python batch_evaluate.py --weights best.pt --source Data/test/ --labels-format xml
-  python batch_evaluate.py  (使用 DEFAULT_CONFIG 中的参数)
+  python batch_evaluate.py  (uses parameters from DEFAULT_CONFIG)
         """
     )
-    parser.add_argument('--weights', type=str, help='模型权重路径')
-    parser.add_argument('--source', type=str, help='测试图片文件夹')
-    parser.add_argument('--labels', type=str, default=None, help='标签文件夹 (可选)')
+    parser.add_argument('--weights', type=str, help='model weights path')
+    parser.add_argument('--source', type=str, help='test image folder')
+    parser.add_argument('--labels', type=str, default=None, help='label folder (optional)')
     parser.add_argument('--labels-format', type=str, dest='labels_format',
                         choices=['txt', 'xml', 'auto'], default=None,
-                        help='标注格式: txt (YOLO), xml (Pascal VOC), auto (自动检测, 默认)')
-    parser.add_argument('--conf', type=float, dest='conf_thres', help='置信度阈值')
-    parser.add_argument('--iou', type=float, dest='iou_thres', help='NMS IoU 阈值')
-    parser.add_argument('--img', type=int, dest='img_size', help='输入图像尺寸')
-    parser.add_argument('--batch', type=int, dest='batch_size', help='批处理大小')
-    parser.add_argument('--device', type=str, help='设备 (cpu, cuda:0, 等)')
-    parser.add_argument('--output', type=str, dest='output_dir', help='输出目录')
+                        help='annotation format: txt (YOLO), xml (Pascal VOC), auto (auto-detect, default)')
+    parser.add_argument('--conf', type=float, dest='conf_thres', help='confidence threshold')
+    parser.add_argument('--iou', type=float, dest='iou_thres', help='NMS IoU threshold')
+    parser.add_argument('--img', type=int, dest='img_size', help='input image size')
+    parser.add_argument('--batch', type=int, dest='batch_size', help='batch size')
+    parser.add_argument('--device', type=str, help='device (cpu, cuda:0, etc.)')
+    parser.add_argument('--output', type=str, dest='output_dir', help='output directory')
     parser.add_argument('--save-img', action='store_true', dest='save_annotated',
-                        help='保存标注图片')
+                        help='save annotated images')
     parser.add_argument('--format', type=str, dest='save_format',
-                        choices=['csv', 'json', 'both'], help='保存格式')
+                        choices=['csv', 'json', 'both'], help='save format')
     parser.add_argument('--prefix', type=str, dest='output_prefix', default=None,
-                        help='输出文件名前缀 (留空则不添加)')
-    parser.add_argument('--warmup', type=int, dest='warmup_iterations', help='预热迭代次数')
+                        help='output filename prefix (leave empty to not add)')
+    parser.add_argument('--warmup', type=int, dest='warmup_iterations', help='warmup iteration count')
 
     args = parser.parse_args()
-    # 只返回非 None 的参数
+    # Only return non-None arguments
     return {k: v for k, v in vars(args).items() if v is not None}
 
 
 # ============================================================================
-# 主函数
+# Main function
 # ============================================================================
 
 def main():
-    """主入口。合并 DEFAULT_CONFIG 和命令行参数后执行评估。"""
-    # 合并配置: 命令行参数优先
+    """Main entry point. Merge DEFAULT_CONFIG and command-line arguments, then run evaluation."""
+    # Merge config: command-line arguments take priority
     config = DEFAULT_CONFIG.copy()
     cli_overrides = parse_args()
     config.update(cli_overrides)
 
-    # 创建评估器并运行
+    # Create the evaluator and run
     try:
         evaluator = BatchEvaluator(config)
         results = evaluator.run()
         return results
     except FileNotFoundError as e:
-        print(f"\n❌ 错误: {e}")
-        print("请检查 CONFIG 中的路径设置。")
+        print(f"\n❌ Error: {e}")
+        print("Please check the path settings in CONFIG.")
         return None
     except Exception as e:
-        print(f"\n❌ 运行出错: {e}")
+        print(f"\n❌ Runtime error: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -1157,15 +1158,15 @@ def main():
 
 if __name__ == '__main__':
     """
-    直接运行说明:
+    Direct run instructions:
 
-    1. 在上方的 DEFAULT_CONFIG 字典中修改参数
-    2. 直接运行: python batch_evaluate.py
-    3. 或用命令行覆盖个别参数: python batch_evaluate.py --conf 0.6
+    1. Modify the parameters in the DEFAULT_CONFIG dictionary above
+    2. Run directly: python batch_evaluate.py
+    3. Or override individual parameters from the command line: python batch_evaluate.py --conf 0.6
 
-    输出文件:
-      - evaluation_metrics.csv   : 每类 + 总体指标
-      - evaluation_speed.csv     : FPS 速度信息
-      - evaluation_results.json  : 完整结果 (选择 JSON 格式时)
+    Output files:
+      - evaluation_metrics.csv   : per-class + overall metrics
+      - evaluation_speed.csv     : FPS speed info
+      - evaluation_results.json  : full results (when JSON format is selected)
     """
     main()

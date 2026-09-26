@@ -21,7 +21,7 @@ from ultralytics.change_model.FEB import FB, Bottleneck_FEB, C3k_FEB, C3k2_FEB
 from ultralytics.nn.modules.GhostConv import GhostConv, GhostBottleneck, C3_Ghost
 from ultralytics.change_model.Di_SpAM import C3k2_DI_SpAM
 """
-添加模块在1646行
+Add modules at line 1646
 """
 
 from ultralytics.nn.modules import (

@@ -14,18 +14,18 @@ class YOLOSingleDetector:
 
     def _load_model(self):
         if not os.path.exists(self.weights_path):
-            raise FileNotFoundError(f"权重文件不存在: {self.weights_path}")
+            raise FileNotFoundError(f"Weights file does not exist: {self.weights_path}")
         model = YOLO(self.weights_path)
-        print(f"模型加载完成，使用设备: {model.device}")
+        print(f"Model loaded, using device: {model.device}")
         return model
 
     def detect(self, image_path):
         if not os.path.exists(image_path):
-            raise FileNotFoundError(f"图片文件不存在: {image_path}")
+            raise FileNotFoundError(f"Image file does not exist: {image_path}")
 
         image = cv2.imread(image_path)
         if image is None:
-            raise ValueError(f"无法读取图片: {image_path}")
+            raise ValueError(f"Cannot read image: {image_path}")
 
         results = self.model(image,
                              conf=self.conf_thres,
@@ -55,7 +55,7 @@ class YOLOSingleDetector:
         with open(save_path, 'w') as f:
             f.write('\n'.join(labels))
 
-        print(f"YOLO标注文件已保存: {save_path}")
+        print(f"YOLO label file saved: {save_path}")
 
     def save_detected_image(self, image, result, save_path):
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -63,10 +63,10 @@ class YOLOSingleDetector:
         result_image = result.plot()
 
         cv2.imwrite(save_path, result_image)
-        print(f"检测结果图片已保存: {save_path}")
+        print(f"Detection result image saved: {save_path}")
 
     def run(self, image_path, output_dir='./output'):
-        print(f"开始检测图片: {image_path}")
+        print(f"Start detecting image: {image_path}")
 
         result, image = self.detect(image_path)
 
@@ -81,13 +81,13 @@ class YOLOSingleDetector:
         self.save_detected_image(image, result, image_save_path)
 
         if result.boxes is not None and len(result.boxes) > 0:
-            print(f"检测完成！共检测到 {len(result.boxes)} 个目标")
+            print(f"Detection complete! Detected {len(result.boxes)} objects in total")
             for i, box in enumerate(result.boxes):
                 class_name = self.model.names[int(box.cls[0])]
                 conf = float(box.conf[0])
-                print(f"  目标 {i+1}: {class_name} (置信度: {conf:.4f})")
+                print(f"  Object {i+1}: {class_name} (confidence: {conf:.4f})")
         else:
-            print("检测完成！未检测到目标")
+            print("Detection complete! No objects detected")
 
 
 if __name__ == '__main__':
@@ -101,14 +101,14 @@ if __name__ == '__main__':
     }
 
     print("=" * 50)
-    print("YOLO单张图片检测工具")
+    print("YOLO single-image detection tool")
     print("=" * 50)
-    print(f"权重文件: {config['weights']}")
-    print(f"检测图片: {config['image_path']}")
-    print(f"输出目录: {config['output_dir']}")
-    print(f"置信度阈值: {config['conf_thres']}")
-    print(f"IOU阈值: {config['iou_thres']}")
-    print(f"设备: {config['device']}")
+    print(f"Weights file: {config['weights']}")
+    print(f"Detection image: {config['image_path']}")
+    print(f"Output directory: {config['output_dir']}")
+    print(f"Confidence threshold: {config['conf_thres']}")
+    print(f"IoU threshold: {config['iou_thres']}")
+    print(f"Device: {config['device']}")
     print("=" * 50)
 
     try:
@@ -120,4 +120,4 @@ if __name__ == '__main__':
         )
         detector.run(config['image_path'], config['output_dir'])
     except Exception as e:
-        print(f"检测失败: {str(e)}")
+        print(f"Detection failed: {str(e)}")

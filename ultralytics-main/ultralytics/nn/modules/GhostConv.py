@@ -18,7 +18,7 @@ class GhostConv(nn.Module):
         out = torch.cat([y, ghost], dim=1)[:, :self.primary.out_channels*2, :, :]
         return self.act(self.bn(out))
 
-# 下面给出 C3_Ghost，直接替换 C3 即可
+# Below is C3_Ghost, which can be used to directly replace C3
 class GhostBottleneck(nn.Module):
     def __init__(self, c1, c2, shortcut=True, g=1, e=0.5):
         super().__init__()
