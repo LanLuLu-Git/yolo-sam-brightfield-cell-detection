@@ -74,7 +74,7 @@ class XTCPredictConfig:
         self.yolo_weights_path = 'runs/260721前/260314-YOLOv8FEB-C2C12-293-400/weights/best.pt'
         self.sam_checkpoint = os.path.join(os.path.dirname(__file__),
                                           'segment-anything-main/models/sam_vit_h_4b8939.pth')
-        self.template_path = os.path.join(os.path.dirname(__file__), "tp260719.png")
+        self.template_path = os.path.join(os.path.dirname(__file__), "tp260719.jpg")
 
         # Model configuration
         self.sam_model_type = 'vit_h'
