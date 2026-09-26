@@ -1,0 +1,27 @@
+# ===== 模型权重（本地保留，不上传 GitHub）=====
+*.pt
+*.pth
+*.onnx
+
+# ===== 训练/预测输出 =====
+runs/
+result/
+Data/
+images/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# ===== IDE / 工具 =====
+.idea/
+.vscode/
+.claude/
+
+# ===== 日志与临时文件 =====
+*.log
+tmp*
+.DS_Store

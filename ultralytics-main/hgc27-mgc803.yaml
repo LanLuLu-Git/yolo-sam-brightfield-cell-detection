@@ -1,0 +1,17 @@
+train: D:\Data\XTCdata\hgc27-mgc803\train
+val: D:\Data\XTCdata\hgc27-mgc803\val
+test: D:\Data\XTCdata\hgc27-mgc803\test
+nc: 3
+
+# 类别名称必须与VOC XML文件中的name字段完全一致
+# 顺序不重要，但建议按字母顺序排列方便管理
+names: ['Sphere_Probe', 'Mgc_803_Live', 'Hgc_27_Live']
+
+# # 使用VOC格式XML标注时的额外配置
+# voc:
+#   # XML文件路径（相对于数据集根目录）
+#   annotations_dir: 'Annotations'
+#   # 图片文件路径（相对于数据集根目录）
+#   images_dir: 'JPEGImages'
+#   # 类别名称在XML文件中的标签名（通常是'name'）
+#   class_name_tag: 'name'

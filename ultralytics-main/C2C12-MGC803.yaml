@@ -1,0 +1,15 @@
+train: D:/Data/徐庭臣训练数据集/C2C12-MGC803/train
+val: D:/Data/徐庭臣训练数据集/C2C12-MGC803/val
+test: D:/Data/徐庭臣训练数据集/C2C12-MGC803/test
+nc: 2
+
+names: ['C2C12', 'MGC803']
+
+# # 使用VOC格式XML标注时的额外配置
+# voc:
+#   # XML文件路径（相对于数据集根目录）
+#   annotations_dir: 'Annotations'
+#   # 图片文件路径（相对于数据集根目录）
+#   images_dir: 'JPEGImages'
+#   # 类别名称在XML文件中的标签名（通常是'name'）
+#   class_name_tag: 'name'
